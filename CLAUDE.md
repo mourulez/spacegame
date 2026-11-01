@@ -14,9 +14,20 @@ npm run dev:lan    # same, exposed on the LAN to test on a phone/tablet on the s
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build into dist/
 npm run preview    # serve dist/ (also exposed on the LAN)
+npm test           # Playwright: builds, serves dist/ on :4174, runs tests/ on every device project
+npx playwright test -g "joystick"           # tests whose title matches
+npx playwright test --project=iphone        # one device project
+npx playwright test tests/smoke.spec.ts:28  # the test at that line
 ```
 
-There is no test runner or linter yet. `npm run build` (strict tsc + Vite) is the check that CI runs.
+`npm run build` (strict tsc + Vite) is the check that CI runs; there is no linter. Playwright tests aren't in CI yet, so run `npm test` before committing.
+
+### Playwright
+
+- Device projects in `playwright.config.ts` emulate real devices (viewport, pixel ratio, touch, user agent): desktop Chrome, Android phone (Chromium) and iPhone/iPad (WebKit, the engine all iOS browsers use) in portrait and landscape. Add new device-dependent behavior to tests that run on all projects.
+- Tests run against the production build, not the dev server, and fail on any console error or any request outside the local server. That is how the offline rule is enforced.
+- The smoke test writes `screenshots/<project>.png` (gitignored). Use these to check visual changes on every device and orientation, instead of headless browser screenshots, which can't emulate phone sizes.
+- First-time setup on a new machine: `npx playwright install chromium webkit`.
 
 ## Up-to-date docs
 
