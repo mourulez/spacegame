@@ -1,13 +1,22 @@
 import * as THREE from 'three';
+import { STEP } from '../core/loop';
+import { PLAY_AREA } from './play-area';
 
 const SPEED = 8; // world units per second
 const BANK = 0.5; // radians of roll at full lateral speed
 const PITCH = 0.3;
+const TILT_EASE = 1 - Math.exp(-10 * STEP); // per-step blend toward the target tilt
 
 export class Ship {
   readonly object = new THREE.Group();
-  /** Half-extents of the area the ship may move in (set from the viewport). */
-  readonly bounds = new THREE.Vector2(5, 3);
+
+  // Simulation state for the current and previous step; render() interpolates between them.
+  private readonly pos = new THREE.Vector2();
+  private readonly prevPos = new THREE.Vector2();
+  private roll = 0;
+  private prevRoll = 0;
+  private pitch = 0;
+  private prevPitch = 0;
 
   constructor() {
     const hull = new THREE.MeshStandardMaterial({ color: 0xc8d4e6, metalness: 0.6, roughness: 0.35, flatShading: true });
@@ -27,14 +36,22 @@ export class Ship {
     this.object.add(body, wings, engine);
   }
 
-  update(dt: number, axis: { x: number; y: number }) {
-    const p = this.object.position;
-    p.x = THREE.MathUtils.clamp(p.x + axis.x * SPEED * dt, -this.bounds.x, this.bounds.x);
-    p.y = THREE.MathUtils.clamp(p.y + axis.y * SPEED * dt, -this.bounds.y, this.bounds.y);
+  step(axis: { x: number; y: number }) {
+    this.prevPos.copy(this.pos);
+    this.prevRoll = this.roll;
+    this.prevPitch = this.pitch;
+
+    this.pos.x = THREE.MathUtils.clamp(this.pos.x + axis.x * SPEED * STEP, -PLAY_AREA.halfWidth, PLAY_AREA.halfWidth);
+    this.pos.y = THREE.MathUtils.clamp(this.pos.y + axis.y * SPEED * STEP, -PLAY_AREA.halfHeight, PLAY_AREA.halfHeight);
 
     // Ease the tilt toward the input direction so it does not snap.
-    const k = 1 - Math.exp(-10 * dt);
-    this.object.rotation.z += (-axis.x * BANK - this.object.rotation.z) * k;
-    this.object.rotation.x += (axis.y * PITCH - this.object.rotation.x) * k;
+    this.roll += (-axis.x * BANK - this.roll) * TILT_EASE;
+    this.pitch += (axis.y * PITCH - this.pitch) * TILT_EASE;
+  }
+
+  render(alpha: number) {
+    const lerp = THREE.MathUtils.lerp;
+    this.object.position.set(lerp(this.prevPos.x, this.pos.x, alpha), lerp(this.prevPos.y, this.pos.y, alpha), 0);
+    this.object.rotation.set(lerp(this.prevPitch, this.pitch, alpha), 0, lerp(this.prevRoll, this.roll, alpha));
   }
 }
