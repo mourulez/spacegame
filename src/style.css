@@ -38,6 +38,38 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.fullscreen-button {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  right: calc(8px + env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(207 227 255 / 0.12);
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.fullscreen-button:hover,
+.fullscreen-button:focus-visible {
+  background: rgb(207 227 255 / 0.25);
+}
+
+.fullscreen-button svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .stick-base,
 .stick-knob {
   position: absolute;
