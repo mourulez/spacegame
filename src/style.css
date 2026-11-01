@@ -1,0 +1,58 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #05060f;
+  color: #cfe3ff;
+  font: 14px/1.2 system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* Overlay for HUD/menus. Pointer events pass through to the canvas unless an
+   element opts back in with pointer-events: auto. */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-fps {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  left: calc(8px + env(safe-area-inset-left));
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.stick-base,
+.stick-knob {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+}
+
+.stick-base {
+  border: 2px solid rgb(207 227 255 / 0.35);
+  background: rgb(207 227 255 / 0.08);
+}
+
+.stick-knob {
+  width: 52px;
+  height: 52px;
+  background: rgb(207 227 255 / 0.45);
+}
