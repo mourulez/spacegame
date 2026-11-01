@@ -31,16 +31,13 @@ test('fullscreen button matches browser support', async ({ page }) => {
   await expect(page.locator('.fullscreen-button')).toHaveCount(supported ? 1 : 0);
 });
 
-test('pointer drag shows the joystick and releasing hides it', async ({ page }) => {
+test('portrait shows the rotate prompt, landscape shows the game', async ({ page }) => {
   await page.goto('/');
   const { width, height } = page.viewportSize()!;
-  const knob = page.locator('.stick-knob');
-
-  await page.mouse.move(width / 2, height / 2);
-  await page.mouse.down();
-  await page.mouse.move(width / 2 + 40, height / 2 - 20);
-  await expect(knob).toBeVisible();
-
-  await page.mouse.up();
-  await expect(knob).toBeHidden();
+  const prompt = page.locator('.rotate-prompt');
+  if (height > width) {
+    await expect(prompt).toBeVisible();
+  } else {
+    await expect(prompt).toBeHidden();
+  }
 });

@@ -18,7 +18,10 @@ export function addFullscreenButton(root: HTMLElement, target: Element = documen
     if (document.fullscreenElement) {
       void document.exitFullscreen();
     } else {
-      target.requestFullscreen().catch(() => {});
+      target
+        .requestFullscreen()
+        .then(lockLandscape)
+        .catch(() => {});
     }
   };
 
@@ -34,4 +37,10 @@ export function addFullscreenButton(root: HTMLElement, target: Element = documen
   });
   document.addEventListener('fullscreenchange', sync);
   sync();
+}
+
+/** The game is landscape only. Browsers that can lock the orientation (Android, in fullscreen) do it here. */
+function lockLandscape() {
+  const orientation = screen.orientation as ScreenOrientation & { lock?: (type: string) => Promise<void> };
+  return orientation.lock?.('landscape');
 }

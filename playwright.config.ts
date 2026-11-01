@@ -23,5 +23,6 @@ export default defineConfig({
     { name: 'iphone', use: { ...devices['iPhone 17'] } },
     { name: 'iphone-landscape', use: { ...devices['iPhone 17 landscape'] } },
     { name: 'ipad', use: { ...devices['iPad (gen 11)'] } },
+    { name: 'ipad-landscape', use: { ...devices['iPad (gen 11) landscape'] } },
   ],
 });
