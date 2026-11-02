@@ -1,8 +1,15 @@
 import * as THREE from 'three';
+import { STEP } from '../core/loop';
 import { AIM_DISTANCE, PLAY_SLOPE } from './play-area';
 import type { Flight } from './flight';
 
 export const BASE_PITCH = THREE.MathUtils.degToRad(7); // looking up from the flight path, so the horizon sits low and the sky dominates
+
+/** Camera shake on a hit: short, small, decaying. */
+const SHAKE_STEPS = Math.round(0.3 / STEP);
+const SHAKE_ANGLE = THREE.MathUtils.degToRad(1.2); // at its start
+// Two unrelated frequencies per axis, so it reads as a jolt rather than a wobble.
+const SHAKE_FREQ = { x: [47, 29], y: [41, 23] } as const; // rad/s
 
 /**
  * The camera plus everything gameplay lives in, riding on the player's real
@@ -14,12 +21,43 @@ export class CameraRig {
   readonly object = new THREE.Group();
   readonly camera = new THREE.PerspectiveCamera(50, 1, 0.1, 4000);
 
+  // Shake: steps left, and the camera's turn for the current and previous step.
+  private shakeLeft = 0;
+  private readonly shakeAngle = new THREE.Vector2();
+  private readonly prevShakeAngle = new THREE.Vector2();
+
   constructor() {
     this.object.add(this.camera);
   }
 
+  /** Start a camera shake (a hit). */
+  shake() {
+    this.shakeLeft = SHAKE_STEPS;
+  }
+
+  step() {
+    this.prevShakeAngle.copy(this.shakeAngle);
+    if (this.shakeLeft <= 0) {
+      this.shakeAngle.set(0, 0);
+      return;
+    }
+    this.shakeLeft--;
+    const t = (SHAKE_STEPS - this.shakeLeft) * STEP;
+    const amplitude = SHAKE_ANGLE * (this.shakeLeft / SHAKE_STEPS) ** 2;
+    this.shakeAngle.set(
+      amplitude * 0.5 * (Math.sin(t * SHAKE_FREQ.x[0]) + Math.sin(t * SHAKE_FREQ.x[1] + 1)),
+      amplitude * 0.5 * (Math.sin(t * SHAKE_FREQ.y[0] + 2) + Math.sin(t * SHAKE_FREQ.y[1])),
+    );
+  }
+
   render(alpha: number, flight: Flight) {
     flight.apply(this.object, alpha, BASE_PITCH);
+    const lerp = THREE.MathUtils.lerp;
+    this.camera.rotation.set(
+      lerp(this.prevShakeAngle.x, this.shakeAngle.x, alpha),
+      lerp(this.prevShakeAngle.y, this.shakeAngle.y, alpha),
+      0,
+    );
   }
 
   /**

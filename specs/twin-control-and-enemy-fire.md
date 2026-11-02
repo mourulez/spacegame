@@ -1,6 +1,6 @@
 # Twin control, enemy fire, shield and death
 
-Status: agreed design, not started. Build it as a prototype behind `?control=twin`, so it can be compared on a phone with the current scheme, then make it the default once approved (and update CLAUDE.md's input rules, see below).
+Status: implemented, and twin control is now the only control (the `?control=twin` flag and the one control are gone; CLAUDE.md's input rules are updated). Added after playtesting: bullets turn red only when about to hit, fade away once past the ship, and the player's shots destroy them, except red ones, which must be dodged (otherwise the shots leaving the nose shield the ship on their own). The ship's hit sphere stays smaller than its wings for now. Left: tune on a real phone (aim area share, gains, bullet speed and rate, shield size) and check 60 fps there; enemy paths are not yet laid out to stay inside the aim area (they only fire from inside it).
 
 ## Why
 
@@ -52,7 +52,7 @@ The ship can move into the band between the two, out of the line of fire and off
 
 - Simple round bullets: one shared low-poly sphere geometry, one `InstancedMesh` (plus an outline if it reads better), in combat space. Being 3D, they grow naturally as they approach; no scaling tricks.
 - Fired by enemies at the ship's position at the moment of firing, in straight lines, slow enough to read (about 1.5–2 s to reach the ship). Few at a time.
-- **Warning:** a bullet turns red while it is going to hit. Each step, take the bullet's straight path and find its closest approach to the ship's *current* position. If that miss distance is under the ship's hit radius plus the bullet's, it is red; otherwise it is its normal color. So moving the ship off its path turns it back. Add a little hysteresis (for example, a slightly larger radius to stay red than to turn red) so it does not flicker at the edge.
+- **Warning:** a bullet turns red when it is about to hit. Each step, take the bullet's straight path and find its closest approach to the ship's *current* position. If that miss distance is under the ship's hit radius plus the bullet's, and the closest approach is less than about 0.6 s away, it is red; otherwise it is its normal color. So moving the ship off its path turns it back. A little hysteresis (a slightly larger radius to stay red than to turn red) keeps it from flickering at the edge. Once past the ship, a bullet fades away and can no longer hit.
 - **Hit:** segment-versus-sphere test against the ship's hit sphere, like the player's shots against enemies (`segmentHitsSphere`), with the ship's position taken into combat space.
 - Fixed timestep, previous/current positions for interpolation, snapping on spawn, no allocations in the loop.
 
@@ -73,7 +73,7 @@ When the shield reaches zero:
 
 ## Tests
 
-- Playwright, on every device project: the game boots with `?control=twin` without console errors or external requests, and writes `screenshots/<project>-twin.png`.
+- Playwright, on every device project: the game boots without console errors or external requests, and writes `screenshots/<project>.png`.
 - The shield bar is present and visible in landscape.
 - If practical, a test that drives the ship with the keyboard into a bullet and checks that the shield drops.
 
@@ -85,7 +85,7 @@ When the shield reaches zero:
 
 ## Out of scope (still under discussion)
 
-- Shooting enemy bullets down.
+- ~~Shooting enemy bullets down.~~ Done: the player's shots destroy them, except red ones.
 - A dodge action (barrel roll or dash).
 - Pickups.
 - Sound, other warnings (a cue on the bullet itself, audio), and moving the shield bar next to the reticle.

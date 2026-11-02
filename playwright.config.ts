@@ -5,6 +5,9 @@ const PORT = 4174; // not 4173, so it doesn't collide with a running `npm run pr
 export default defineConfig({
   testDir: 'tests',
   fullyParallel: true,
+  // Headless browsers render WebGL in software: more than a few game pages at once
+  // starve each other of CPU until screenshots time out.
+  workers: 3,
   reporter: 'list',
   use: {
     baseURL: `http://localhost:${PORT}/`,

@@ -72,8 +72,8 @@ const overtake: Path = (t, side, lane, out) => {
 /**
  * Bursts up out of the clouds below, well ahead, nose high, climbing steeply
  * to its lane while drifting across, then pulls away up and out. It starts
- * below the cloud blanket wherever the camera is (5 to 41 above it,
- * along the rail and across the box).
+ * below the cloud blanket wherever the camera is (8 to 38 above it,
+ * along the rail).
  */
 const RISE_DEPTH = -60; // below the camera: under the clouds even at the rail's highest
 const RISE_CLIMB = 3; // seconds to climb to the lane
@@ -168,9 +168,9 @@ export class Enemies {
     }
   }
 
-  /** `frameYawRate`: how fast the rail is turning, so the enemies bank with it. */
-  step(frameYawRate: number) {
-    this.waveTimer -= STEP;
+  /** `frameYawRate`: how fast the rail is turning, so the enemies bank with it. `spawn`: whether new waves keep coming. */
+  step(frameYawRate: number, spawn = true) {
+    if (spawn) this.waveTimer -= STEP;
     if (this.waveTimer <= 0) {
       this.waveTimer += WAVE_INTERVAL;
       this.spawnWave(WAVES[this.nextWave]);

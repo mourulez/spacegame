@@ -10,6 +10,10 @@ const MAX_BURSTS = 24;
 
 export const KILL_BURST = { size: 9, steps: 30 } as const;
 export const HIT_BURST = { size: 2.2, steps: 9 } as const;
+/** An enemy bullet shot down. */
+export const POP_BURST = { size: 3, steps: 12 } as const;
+/** The player's ship going down, close to the camera: big on screen even at this size. */
+export const DEATH_BURST = { size: 3.5, steps: 24 } as const;
 
 interface Burst {
   active: boolean;

@@ -40,6 +40,36 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Shield: a row of cells at the top middle, one lost per hit. */
+.hud-shield {
+  position: absolute;
+  top: calc(2.5vmin + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.6vmin;
+  padding: 0.6vmin;
+  border-radius: 1vmin;
+  background: rgb(10 20 40 / 0.35);
+}
+
+.hud-shield-cell {
+  width: 5.5vmin;
+  height: 1.8vmin;
+  border-radius: 0.4vmin;
+  background: rgb(255 255 255 / 0.15);
+}
+
+.hud-shield-cell.full {
+  background: #6fe3ff;
+  box-shadow: 0 0 0.8vmin rgb(111 227 255 / 0.8);
+}
+
+.hud-shield.low .hud-shield-cell.full {
+  background: #ff4a3a;
+  box-shadow: 0 0 0.8vmin rgb(255 74 58 / 0.8);
+}
+
 .fullscreen-button {
   position: absolute;
   top: calc(8px + env(safe-area-inset-top));

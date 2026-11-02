@@ -31,8 +31,8 @@ const PUFF_RADIUS = { min: 10, max: 30 } as const;
 const PUFF_FLATTEN = { min: 0.4, max: 0.8 } as const;
 /**
  * Heights the puffs' tops reach, rolling between them in slow swells. The
- * camera never goes below y = 5 (the rail's lowest point minus its way down the box)
- * and the ship sits up to about 2 below it, so the highest tops pass just
+ * camera never goes below y = 8 (the rail's lowest point) and the ship sits
+ * up to about 2 below it, so the highest tops pass just
  * under the ship. The cloud deck plane at y = 0 carries the blanket on beyond
  * the distance it is drawn to.
  */

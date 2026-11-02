@@ -63,8 +63,8 @@ export class Shots {
     }
   }
 
-  /** Move the shots and fire a new one when due, from `muzzle` toward `target` (combat space). */
-  step(muzzle: THREE.Vector3, target: THREE.Vector3) {
+  /** Move the shots and, if `fire`, fire a new one when due, from `muzzle` toward `target` (combat space). */
+  step(muzzle: THREE.Vector3, target: THREE.Vector3, fire = true) {
     for (const s of this.list) {
       if (!s.active) continue;
       s.prevPos.copy(s.pos);
@@ -72,7 +72,7 @@ export class Shots {
       if (--s.life <= 0) s.active = false;
     }
 
-    if (--this.cooldown > 0) return;
+    if (!fire || --this.cooldown > 0) return;
     this.cooldown = FIRE_INTERVAL;
     const s = this.list.find((shot) => !shot.active);
     if (!s) return;

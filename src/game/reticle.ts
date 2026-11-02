@@ -1,30 +1,27 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { STEP } from '../core/loop';
+import type { Vec2 } from '../core/input';
 import { AIM_AREA, AIM_DISTANCE, RETICLE_RADIUS } from './play-area';
+import { Steering } from './steering';
 
-const KEY_SPEED = 130; // world units per second on the aim plane: crosses the play area in about 0.6 s
-const KEY_EASE = 1 - Math.exp(-25 * STEP); // per-step blend toward the key velocity: snappy but still precise for taps
 /**
  * The reticle is drawn this close to the camera, scaled down to the same size
- * on screen: just behind the ship, so the ship covers it, and in front of any
- * scenery, enemy or cloud, so none of them does. It writes no depth and is
- * drawn just before the shots, so they always show over it.
+ * on screen: in front of any scenery, enemy or cloud, so none of them covers
+ * it. It ignores depth, so the ship never covers it either, and is drawn just
+ * before the shots, so they always show over it.
  */
 const DRAW_DISTANCE = 9;
 const DRAW_SCALE = DRAW_DISTANCE / AIM_DISTANCE;
 /** Draw order in the transparent pass: after the clouds (-1) and explosions (0), before the shots. */
 export const RETICLE_ORDER = 1;
-/** Aim-plane units moved per viewport height of touch drag: a swipe of about half the screen height crosses the play area. */
-const DRAG_GAIN = 2.6 * AIM_AREA.halfHeight * 2;
 
-/** The aiming reticle the player steers. Drawn over the scenery but under the ship. */
+/** The aiming reticle the player steers. Drawn over the scenery and the ship, under the shots. */
 export class Reticle {
   readonly object: THREE.Mesh;
   /** Current position on the aim plane, in rig space. */
   readonly pos = new THREE.Vector3(0, 0, -AIM_DISTANCE);
   private readonly prevPos = this.pos.clone();
-  private readonly vel = new THREE.Vector2();
+  private readonly steering = new Steering(AIM_AREA);
 
   constructor() {
     const r = RETICLE_RADIUS;
@@ -41,7 +38,13 @@ export class Reticle {
       new THREE.CircleGeometry(r * 0.07, 12),
     ]);
     // In the transparent pass, after the sky, clouds and effects; see RETICLE_ORDER.
-    const material = new THREE.MeshBasicMaterial({ color: 0xff2d2d, toneMapped: false, transparent: true, depthWrite: false });
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xff2d2d,
+      toneMapped: false,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+    });
     this.object = new THREE.Mesh(geometry, material);
     this.object.renderOrder = RETICLE_ORDER;
     this.object.scale.setScalar(DRAW_SCALE);
@@ -52,18 +55,15 @@ export class Reticle {
    * `axis`: keyboard direction. `drag`: touch drag in viewport heights.
    * `aim`: a point to jump to (mouse), on the aim plane, or null.
    */
-  step(axis: { x: number; y: number }, drag: { x: number; y: number }, aim: THREE.Vector2 | null) {
+  step(axis: Vec2, drag: Vec2, aim: THREE.Vector2 | null) {
     this.prevPos.copy(this.pos);
+    this.steering.step(axis, drag, aim);
+    this.pos.set(this.steering.pos.x, this.steering.pos.y, this.pos.z);
+  }
 
-    this.vel.x += (axis.x * KEY_SPEED - this.vel.x) * KEY_EASE;
-    this.vel.y += (axis.y * KEY_SPEED - this.vel.y) * KEY_EASE;
-    if (aim) this.pos.set(aim.x, aim.y, this.pos.z);
-    this.pos.x += this.vel.x * STEP + drag.x * DRAG_GAIN;
-    this.pos.y += this.vel.y * STEP + drag.y * DRAG_GAIN;
-
-    const { halfWidth, halfHeight } = AIM_AREA;
-    this.pos.x = THREE.MathUtils.clamp(this.pos.x, -halfWidth, halfWidth);
-    this.pos.y = THREE.MathUtils.clamp(this.pos.y, -halfHeight, halfHeight);
+  /** Hold still where it is (nothing to interpolate). */
+  hold() {
+    this.prevPos.copy(this.pos);
   }
 
   render(alpha: number) {

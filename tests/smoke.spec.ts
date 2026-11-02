@@ -41,3 +41,26 @@ test('portrait shows the rotate prompt, landscape shows the game', async ({ page
     await expect(prompt).toBeHidden();
   }
 });
+
+test('shows a full shield bar on screen in landscape', async ({ page }) => {
+  await page.goto('/');
+  const shield = page.locator('.hud-shield');
+  await expect(shield).toHaveAttribute('data-value', '5');
+  const { width, height } = page.viewportSize()!;
+  test.skip(height > width, 'portrait shows the rotate prompt over the game');
+  await expect(shield).toBeVisible();
+  await expect(shield.locator('.hud-shield-cell.full')).toHaveCount(5);
+  const box = (await shield.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
+});
+
+test('enemy fire hits a ship that stays in the line of fire', async ({ page }) => {
+  test.slow(); // waits for waves to come and fire, at whatever speed the emulated device renders
+  await page.goto('/');
+  const shield = page.locator('.hud-shield');
+  await expect(shield).toHaveAttribute('data-value', '5');
+  // Bullets are aimed at where the ship is when fired: a ship held still at rest gets hit.
+  await expect.poll(async () => Number(await shield.getAttribute('data-value')), { timeout: 45_000 }).toBeLessThan(5);
+});

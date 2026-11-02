@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { STEP } from '../core/loop';
 import type { Flight } from './flight';
-import { SHIP_DISTANCE, SHIP_LIMIT, SHIP_REST_Y } from './play-area';
+import { SHIP_AREA, SHIP_DISTANCE, SHIP_REST_Y } from './play-area';
 import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from './toon';
 
-// Roll into sideways moves: about 35 degrees at the keyboard's full sideways
-// speed (about 20 units/s across the box).
-const BANK_PER_SPEED = 0.03; // radians of roll per world unit/s of lateral speed
+// The ship's spring toward its steering: critically damped, so it settles smoothly without overshooting.
+const FREQ = 9; // rad/s
+// Roll into sideways moves: about 35 degrees at the keyboard's full sideways speed.
+const BANK_PER_SPEED = 0.18; // radians of roll per ship-area half width per second of lateral speed
 const BANK_PER_OFFSET = 0.2; // extra roll at the side edges; the camera already banks with the turn
 const MAX_BANK = THREE.MathUtils.degToRad(45); // the rail's bank and the player's together
 const BANK_EASE = 1 - Math.exp(-10 * STEP);
@@ -15,13 +16,23 @@ const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD = new THREE.Vector3(0, 0, 1);
 /** Where the shots leave from, in the ship's own space: just ahead of the nose. */
 const MUZZLE = new THREE.Vector3(0, 0, -1.4);
+const FLASH_STEPS = 6; // how long a hit flashes the ship white
+const FLASH_COLOR = new THREE.Color(0xffffff);
+const NO_EMISSIVE = new THREE.Color(0x000000);
+
+// Falling after death: under gravity, losing its forward speed to drag, spinning around its nose.
+const GRAVITY = 15; // world units per second, per second
+const FALL_DRAG = Math.exp(-1.5 * STEP); // per step, on horizontal speed only
+const FALL_SPIN = 7; // rad/s
+const FALL_NOSE_EASE = 1 - Math.exp(-4 * STEP); // how fast the nose turns to follow its fall
 
 /**
- * The player's ship, in the camera rig's space. Its place on screen comes
- * from the flight (see Flight.shipOffset: on the rail at rest, moved around
- * the box by the reticle); its nose always points exactly at the reticle; it
- * banks into the rail's curves (the part of the bank the camera does not
- * take) and into its own sideways moves. Cel shaded: toon materials with a three-tone ramp plus an
+ * The player's ship, in the camera rig's space. It follows its own steering
+ * around the ship area (steer). Its nose always points exactly at
+ * the reticle; it banks into the rail's curves (the part of the bank the
+ * camera does not take) and into its own sideways moves. When it dies it
+ * leaves the rig for world space and falls (die, fall).
+ * Cel shaded: toon materials with a three-tone ramp plus an
  * inverted-hull outline. Four draw calls in total.
  */
 export class Ship {
@@ -32,42 +43,123 @@ export class Ship {
   private readonly quat = new THREE.Quaternion();
   private readonly prevQuat = new THREE.Quaternion();
   private roll = 0; // radians, positive to the left
+  private readonly vel = new THREE.Vector2(); // across its plane, world units/s
+  private flash = 0; // steps of hit flash left
+  /** Whether it is falling in world space after its death. */
+  falling = false;
+  private readonly fallVel = new THREE.Vector3();
+  private spin = 0;
+  private readonly materials: THREE.MeshToonMaterial[];
 
   // Scratch objects, reused every step.
   private readonly look = new THREE.Matrix4();
   private readonly rollQuat = new THREE.Quaternion();
+  private readonly fallQuat = new THREE.Quaternion();
+  private readonly scratch = new THREE.Vector3();
 
   constructor() {
     const ramp = toonRamp();
     const { hull, trim, glow } = buildGeometry();
-    const hullMesh = new THREE.Mesh(hull, new THREE.MeshToonMaterial({ color: 0xe4e9f0, gradientMap: ramp }));
-    const trimMesh = new THREE.Mesh(trim, new THREE.MeshToonMaterial({ color: 0x34405c, gradientMap: ramp }));
+    const hullMaterial = new THREE.MeshToonMaterial({ color: 0xe4e9f0, gradientMap: ramp });
+    const trimMaterial = new THREE.MeshToonMaterial({ color: 0x34405c, gradientMap: ramp });
+    this.materials = [hullMaterial, trimMaterial];
+    const hullMesh = new THREE.Mesh(hull, hullMaterial);
+    const trimMesh = new THREE.Mesh(trim, trimMaterial);
     const glowMesh = new THREE.Mesh(glow, new THREE.MeshBasicMaterial({ color: 0xffb04a, toneMapped: false }));
     const outline = new THREE.Mesh(outlineGeometry([hull, trim]), outlineMaterial(0x0c1222, OUTLINE_WIDTH));
     this.object.add(hullMesh, trimMesh, glowMesh, outline);
   }
 
-  /** Jump straight to the flight's current pose, with nothing to interpolate. */
-  snap(reticle: THREE.Vector3, flight: Flight) {
-    this.place(flight);
+  /** Jump to rest, low in the middle of the ship area, ready to fly. */
+  rest(reticle: THREE.Vector3) {
+    this.falling = false;
+    this.flash = 0;
+    this.vel.set(0, 0);
+    this.pos.set(0, SHIP_REST_Y, -SHIP_DISTANCE);
     this.roll = 0;
     this.aim(reticle);
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
-    this.render(1);
   }
 
-  /** Call after the flight's step, so the ship sits where the flight now puts it. */
-  step(reticle: THREE.Vector3, flight: Flight) {
+  /**
+   * Follow `target` (its steering, on its plane) with a
+   * critically damped spring, so it settles without overshooting; bank with
+   * the rail (`restRoll`), into sideways moves and toward the side it is on.
+   */
+  steer(target: THREE.Vector2, reticle: THREE.Vector3, restRoll: number) {
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
-    this.place(flight);
+    if (this.flash > 0) this.flash--;
 
-    // Bank with the rail, plus into sideways moves, and into the turn when held at a side.
-    const bank = flight.restRoll - flight.shipVel.x * BANK_PER_SPEED - flight.shipSide * BANK_PER_OFFSET;
+    const k = FREQ * FREQ;
+    const c = 2 * FREQ;
+    this.vel.x += (k * (target.x - this.pos.x) - c * this.vel.x) * STEP;
+    this.vel.y += (k * (target.y - this.pos.y) - c * this.vel.y) * STEP;
+    this.pos.x += this.vel.x * STEP;
+    this.pos.y += this.vel.y * STEP;
+    // Never out of its area, whatever the step.
+    const { halfWidth, halfHeight } = SHIP_AREA;
+    if (Math.abs(this.pos.x) > halfWidth) {
+      this.pos.x = Math.sign(this.pos.x) * halfWidth;
+      this.vel.x = 0;
+    }
+    if (Math.abs(this.pos.y) > halfHeight) {
+      this.pos.y = Math.sign(this.pos.y) * halfHeight;
+      this.vel.y = 0;
+    }
+
+    const bank = restRoll - (this.vel.x / halfWidth) * BANK_PER_SPEED - this.side * BANK_PER_OFFSET;
     this.roll += (THREE.MathUtils.clamp(bank, -MAX_BANK, MAX_BANK) - this.roll) * BANK_EASE;
 
     this.aim(reticle);
+  }
+
+  /** How far to the side of its area it is, -1 (left edge) to 1 (right edge). */
+  get side(): number {
+    return this.pos.x / SHIP_AREA.halfWidth;
+  }
+
+  /** Its center for the current step, in rig space (world space once falling). */
+  center(out: THREE.Vector3): THREE.Vector3 {
+    return out.copy(this.pos);
+  }
+
+  /** Flash white: it was hit. */
+  hit() {
+    this.flash = FLASH_STEPS;
+  }
+
+  /**
+   * Leave the rig for world space, keeping its place, attitude and velocity:
+   * the flight's along the rail plus its own across the screen. `view` is the
+   * rig's attitude (see Flight.attitude). The caller moves `object` to the scene.
+   */
+  die(flight: Flight, view: THREE.Quaternion) {
+    this.fallVel.set(this.vel.x, this.vel.y, 0).applyQuaternion(view).add(flight.velocity(this.scratch));
+    this.pos.applyQuaternion(view).add(flight.pos);
+    this.quat.premultiply(view);
+    this.prevPos.copy(this.pos);
+    this.prevQuat.copy(this.quat);
+    this.falling = true;
+    this.flash = 0;
+    this.spin = 0;
+  }
+
+  /** Fall: carry on forward while slowing down, drop under gravity, nose down along the fall and spin. */
+  fall() {
+    this.prevPos.copy(this.pos);
+    this.prevQuat.copy(this.quat);
+    this.fallVel.x *= FALL_DRAG;
+    this.fallVel.z *= FALL_DRAG;
+    this.fallVel.y -= GRAVITY * STEP;
+    this.pos.addScaledVector(this.fallVel, STEP);
+
+    this.spin += FALL_SPIN * STEP;
+    this.scratch.addVectors(this.pos, this.fallVel);
+    this.fallQuat.setFromRotationMatrix(this.look.lookAt(this.pos, this.scratch, UP));
+    this.fallQuat.multiply(this.rollQuat.setFromAxisAngle(FORWARD, this.spin));
+    this.quat.slerp(this.fallQuat, FALL_NOSE_EASE);
   }
 
   /** Where shots leave from, for the current step, in rig space. */
@@ -78,18 +170,8 @@ export class Ship {
   render(alpha: number) {
     this.object.position.lerpVectors(this.prevPos, this.pos, alpha);
     this.object.quaternion.slerpQuaternions(this.prevQuat, this.quat, alpha);
-  }
-
-  /** Where the flight puts the ship on screen, held inside the play area just in case. */
-  private place(flight: Flight) {
-    const limitX = SHIP_LIMIT.x * SHIP_DISTANCE;
-    const limitY = SHIP_LIMIT.y * SHIP_DISTANCE;
-    const clamp = THREE.MathUtils.clamp;
-    this.pos.set(
-      clamp(flight.shipOffset.x, -limitX, limitX),
-      clamp(SHIP_REST_Y + flight.shipOffset.y, -limitY, limitY),
-      -SHIP_DISTANCE,
-    );
+    const emissive = this.flash > 0 ? FLASH_COLOR : NO_EMISSIVE;
+    for (const material of this.materials) material.emissive.copy(emissive);
   }
 
   /** Nose (-Z) exactly toward the reticle, then roll around the nose, which keeps it pointing there. */

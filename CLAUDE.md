@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language
+
+Talk to the user in Spanish (castellano). Code, comments, specs, commit messages and this file stay in English, as they are now.
+
 ## Project
 
 A three.js game for web game portals, written in TypeScript and bundled with Vite. Developed and tested on desktop, deployed to GitHub Pages on every push to `main` so it can be played on tablets and phones.
@@ -62,7 +66,7 @@ The game must behave identically on any device, whatever its refresh rate, frame
 - **Landscape only:** in portrait the game shows a "rotate your device" prompt instead (and Android locks to landscape on entering fullscreen). Don't spend effort on portrait layouts.
 - **Screen independence:** define gameplay in world units, never pixels. The play area has a fixed 4:3 aspect ratio, the shape of an iPad in landscape, the least elongated target screen (`src/game/play-area.ts`). The camera always fits the whole play area and the game always fills the screen: wider screens (phones, 16:9 monitors) see more scenery at the sides, which must never give more room to play or any other gameplay advantage. Speeds, sizes and difficulty are the same at any aspect ratio.
 - **Resolution independence:** UI is sized in CSS units relative to the viewport and respects safe-area insets. Pixel density affects only sharpness, never layout or gameplay.
-- **Input independence:** every action must be possible with touch alone and with keyboard/mouse, with equivalent responsiveness and precision. No hover-only or keyboard-only interactions. Aiming: the mouse points at the spot directly, touch drags the reticle relatively like a trackpad (so the finger never covers it), and the keyboard moves it. There is no virtual joystick.
+- **Input independence:** every action must be possible with touch alone and with keyboard/mouse, with equivalent responsiveness and precision. No hover-only or keyboard-only interactions. Two independent controls, the ship and the reticle, with auto-fire, so two thumbs are enough: on touch, two invisible relative drag zones (left half of the screen moves the ship, right half the reticle; a finger keeps the half it started in), each moving its object like a trackpad so the finger never covers it, and nothing drawn; on keyboard, WASD moves the ship and the arrow keys the reticle; the mouse points the reticle at the spot directly. There is no virtual joystick.
 
 ## Other constraints
 
