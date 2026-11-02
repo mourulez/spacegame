@@ -10,6 +10,8 @@ const MAX_BURSTS = 24;
 
 export const KILL_BURST = { size: 9, steps: 30 } as const;
 export const HIT_BURST = { size: 2.2, steps: 9 } as const;
+/** An enemy bullet glancing off the rolling ship: a quick spark. */
+export const GLANCE_BURST = { size: 1.4, steps: 7 } as const;
 /** An enemy bullet shot down. */
 export const POP_BURST = { size: 3, steps: 12 } as const;
 /** The player's ship going down, close to the camera: big on screen even at this size. */

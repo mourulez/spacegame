@@ -5,11 +5,12 @@ import type { Flight } from './flight';
 
 export const BASE_PITCH = THREE.MathUtils.degToRad(7); // looking up from the flight path, so the horizon sits low and the sky dominates
 
-/** Camera shake on a hit: short, small, decaying. */
-const SHAKE_STEPS = Math.round(0.3 / STEP);
-const SHAKE_ANGLE = THREE.MathUtils.degToRad(1.2); // at its start
+/** Camera shake on a hit: short and strong, dying away. */
+const SHAKE_STEPS = Math.round(0.45 / STEP);
+const SHAKE_ANGLE = THREE.MathUtils.degToRad(2.5); // pitch and yaw, at its start
+const SHAKE_ROLL = THREE.MathUtils.degToRad(2); // around the view axis, at its start
 // Two unrelated frequencies per axis, so it reads as a jolt rather than a wobble.
-const SHAKE_FREQ = { x: [47, 29], y: [41, 23] } as const; // rad/s
+const SHAKE_FREQ = { x: [47, 29], y: [41, 23], z: [37, 19] } as const; // rad/s
 
 /**
  * The camera plus everything gameplay lives in, riding on the player's real
@@ -23,8 +24,8 @@ export class CameraRig {
 
   // Shake: steps left, and the camera's turn for the current and previous step.
   private shakeLeft = 0;
-  private readonly shakeAngle = new THREE.Vector2();
-  private readonly prevShakeAngle = new THREE.Vector2();
+  private readonly shakeAngle = new THREE.Vector3();
+  private readonly prevShakeAngle = new THREE.Vector3();
 
   constructor() {
     this.object.add(this.camera);
@@ -38,15 +39,19 @@ export class CameraRig {
   step() {
     this.prevShakeAngle.copy(this.shakeAngle);
     if (this.shakeLeft <= 0) {
-      this.shakeAngle.set(0, 0);
+      this.shakeAngle.set(0, 0, 0);
       return;
     }
     this.shakeLeft--;
     const t = (SHAKE_STEPS - this.shakeLeft) * STEP;
-    const amplitude = SHAKE_ANGLE * (this.shakeLeft / SHAKE_STEPS) ** 2;
+    const decay = this.shakeLeft / SHAKE_STEPS;
+    const amplitude = SHAKE_ANGLE * decay;
+    const roll = SHAKE_ROLL * decay;
+    // Phases chosen so every axis is already off center on the first step: the jolt starts at once.
     this.shakeAngle.set(
-      amplitude * 0.5 * (Math.sin(t * SHAKE_FREQ.x[0]) + Math.sin(t * SHAKE_FREQ.x[1] + 1)),
-      amplitude * 0.5 * (Math.sin(t * SHAKE_FREQ.y[0] + 2) + Math.sin(t * SHAKE_FREQ.y[1])),
+      amplitude * 0.5 * (Math.sin(t * SHAKE_FREQ.x[0] + 1) + Math.sin(t * SHAKE_FREQ.x[1] + 2)),
+      amplitude * 0.5 * (Math.sin(t * SHAKE_FREQ.y[0] + 2) + Math.sin(t * SHAKE_FREQ.y[1] + 1)),
+      roll * 0.5 * (Math.sin(t * SHAKE_FREQ.z[0] + 1.5) + Math.sin(t * SHAKE_FREQ.z[1] + 0.5)),
     );
   }
 
@@ -56,7 +61,7 @@ export class CameraRig {
     this.camera.rotation.set(
       lerp(this.prevShakeAngle.x, this.shakeAngle.x, alpha),
       lerp(this.prevShakeAngle.y, this.shakeAngle.y, alpha),
-      0,
+      lerp(this.prevShakeAngle.z, this.shakeAngle.z, alpha),
     );
   }
 

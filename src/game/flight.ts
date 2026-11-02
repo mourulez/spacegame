@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { STEP } from '../core/loop';
 import { BASE_PITCH } from './camera-rig';
-import { PLAY_SLOPE } from './play-area';
+import { CAMERA_FOLLOW, PLAY_SLOPE, SHIP_BOX } from './play-area';
 
 export const SPEED = 100; // world units per second along the rail
 
@@ -26,11 +26,14 @@ const RAIL_BANK_EASE = 1 - Math.exp(-3 * STEP);
 const VIEW_BANK_SHARE = 0.25;
 
 /*
- * The camera rides the rail itself, whatever the ship does: the ship moves on
- * its own around the screen (see Ship), so its moves count in full against
- * enemies and their bullets, which live along the rail (see CombatFrame).
+ * The camera rides the rail, following the ship around its box for
+ * CAMERA_FOLLOW of the way, by moving only (see SHIP_BOX). Enemies and their
+ * bullets live along the rail itself (see CombatFrame), so the ship's moves
+ * count in full against them.
  */
 const LEAN_ROLL = THREE.MathUtils.degToRad(7); // with the ship at a side edge, on top of the camera's share of the rail's bank
+/** How fast the camera drifts back onto the rail once the ship is gone. */
+const FOLLOW_EASE = 1 - Math.exp(-3 * STEP);
 const LEAN_ROLL_EASE = 1 - Math.exp(-3.5 * STEP);
 
 /** How fast the flight comes to a halt when the player dies, and gets going again: about half a second. */
@@ -43,15 +46,19 @@ const LOOK_EASE = 1 - Math.exp(-5 * STEP);
 
 const scratchEuler = new THREE.Euler();
 const scratchQuat = new THREE.Quaternion();
+const scratchVec = new THREE.Vector3();
 
 /**
  * The player's flight: along the rail at a constant speed, coming to a halt
  * when the player goes down. The camera rig rides on `pos`, so the horizon
- * moves because the camera really turns, pitches and rolls. The ship adds the
- * rest of the rail's bank (`restRoll`) to its own.
+ * moves because the camera really turns, pitches and rolls. The ship flies
+ * with the rail's direction and bank (`railAttitude`, `bank`), plus its own.
  */
 export class Flight {
+  /** The camera: on the rail, plus its share of the ship's place in the box. */
   readonly pos = new THREE.Vector3();
+  /** The rail itself, for the current step: where the combat frame is. */
+  readonly railPos = new THREE.Vector3();
   private readonly prevPos = new THREE.Vector3();
   private distance = 0; // along the rail
   /** Current speed along the rail: SPEED, or easing to a halt and back. */
@@ -65,6 +72,8 @@ export class Flight {
   private railYawRate = 0;
 
   private leanRoll = 0;
+  // The camera's offset from the rail, across the view (x right, y up), in world units.
+  private readonly follow = new THREE.Vector2();
   // Extra turn of the view, beyond the rail's heading and slope, to keep something in view (see keepInView).
   private lookYaw = 0;
   private lookPitch = 0;
@@ -98,9 +107,9 @@ export class Flight {
     return this.railYawRate;
   }
 
-  /** The rail's bank the camera does not take, for the ship to fly with at rest. Positive to the left. */
-  get restRoll(): number {
-    return this.railBank * (1 - VIEW_BANK_SHARE);
+  /** The rail's bank, for the ship to fly with. Positive to the left. */
+  get bank(): number {
+    return this.railBank;
   }
 
   /** The flight's velocity, in world units per second, for the current step. */
@@ -114,10 +123,10 @@ export class Flight {
   }
 
   /**
-   * `side`: where the ship is across its area, -1 (left edge) to 1 (right
-   * edge), for the camera's lean.
+   * `ship`: the ship's place in its box (see SHIP_BOX), for the camera to
+   * follow and lean with, or null once it is gone.
    */
-  step(side: number) {
+  step(ship: THREE.Vector2 | null) {
     this.prevPos.copy(this.pos);
     this.prevYaw = this.yaw;
     this.prevPitch = this.pitch;
@@ -133,7 +142,14 @@ export class Flight {
     const bank = THREE.MathUtils.clamp(this.railYawRate * BANK_PER_TURN, -MAX_RAIL_BANK, MAX_RAIL_BANK);
     this.railBank += (bank - this.railBank) * RAIL_BANK_EASE;
 
+    // Rigidly with the ship while it flies, so it never leaves the ship area on screen.
+    if (ship) {
+      this.follow.copy(ship).multiplyScalar(CAMERA_FOLLOW);
+    } else {
+      this.follow.multiplyScalar(1 - FOLLOW_EASE);
+    }
     // Right is negative roll (three.js rotations are counterclockwise).
+    const side = ship ? ship.x / SHIP_BOX.halfWidth : 0;
     this.leanRoll += (-side * LEAN_ROLL - this.leanRoll) * LEAN_ROLL_EASE;
     this.place();
   }
@@ -196,12 +212,14 @@ export class Flight {
     return Math.atan2(-this.ahead.x, -this.ahead.z);
   }
 
-  /** The camera's position and attitude, from the rail and the view's extra turn. */
+  /** The camera's position and attitude, from the rail, the view's extra turn and its share of the ship's place. */
   private place() {
-    this.pos.copy(this.railPoint);
+    this.railPos.copy(this.railPoint);
     this.yaw = this.railYaw + this.lookYaw;
     this.pitch = this.railPitch + this.lookPitch;
     this.roll = this.railBank * VIEW_BANK_SHARE + this.leanRoll;
+    const across = scratchVec.set(this.follow.x, this.follow.y, 0).applyQuaternion(this.attitude(scratchQuat, BASE_PITCH));
+    this.pos.copy(this.railPoint).add(across);
   }
 }
 

@@ -8,7 +8,7 @@ import type { Flight } from './flight';
  * lean). Waves are laid out in it, so they play out the same way on every
  * run. The camera rides the rail, so the ship's moves count in full here.
  *
- * Combat space: origin at the player's camera, x right, y up, -z ahead.
+ * Combat space: origin on the rail at the player's position, x right, y up, -z ahead.
  */
 export class CombatFrame {
   readonly object = new THREE.Group();
@@ -20,6 +20,7 @@ export class CombatFrame {
   private readonly quat = new THREE.Quaternion();
   private readonly prevQuat = new THREE.Quaternion();
   private readonly flightQuat = new THREE.Quaternion();
+  private readonly inverse = new THREE.Quaternion();
 
   snap(flight: Flight) {
     this.step(flight);
@@ -30,18 +31,26 @@ export class CombatFrame {
   step(flight: Flight) {
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
-    this.pos.copy(flight.pos);
+    this.pos.copy(flight.railPos);
     flight.railAttitude(this.quat);
     this.yawRate = flight.turnRate;
   }
 
   /**
    * Rotation that takes directions in the camera rig's space (where the ship
-   * and the reticle live) to combat space, for the current step. Both spaces
-   * share the same origin, the player's position.
+   * and the reticle live) to combat space, for the current step.
    */
   fromRig(flight: Flight, out: THREE.Quaternion): THREE.Quaternion {
     return out.copy(this.quat).invert().multiply(flight.attitude(this.flightQuat, BASE_PITCH));
+  }
+
+  /**
+   * The camera rig's origin (the camera) in combat space, for the current
+   * step: the camera follows the ship a little off the rail. A point in rig
+   * space goes to combat space by `fromRig`, then adding this.
+   */
+  rigOrigin(flight: Flight, out: THREE.Vector3): THREE.Vector3 {
+    return out.subVectors(flight.pos, flight.railPos).applyQuaternion(this.inverse.copy(this.quat).invert());
   }
 
   render(alpha: number) {

@@ -1,21 +1,30 @@
 import * as THREE from 'three';
 import { STEP } from '../core/loop';
+import { BASE_PITCH } from './camera-rig';
 import type { Flight } from './flight';
-import { SHIP_AREA, SHIP_DISTANCE, SHIP_REST_Y } from './play-area';
+import { CAMERA_FOLLOW, SHIP_BOX, SHIP_BOX_REST_Y, SHIP_DISTANCE } from './play-area';
 import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from './toon';
 
 // The ship's spring toward its steering: critically damped, so it settles smoothly without overshooting.
 const FREQ = 9; // rad/s
 // Roll into sideways moves: about 35 degrees at the keyboard's full sideways speed.
-const BANK_PER_SPEED = 0.18; // radians of roll per ship-area half width per second of lateral speed
-const BANK_PER_OFFSET = 0.2; // extra roll at the side edges; the camera already banks with the turn
+const BANK_PER_SPEED = 0.18; // radians of roll per box half width per second of lateral speed
+const BANK_PER_OFFSET = 0.2; // extra roll at the side edges
 const MAX_BANK = THREE.MathUtils.degToRad(45); // the rail's bank and the player's together
 const BANK_EASE = 1 - Math.exp(-10 * STEP);
+/**
+ * The nose turns from the rail's direction toward the ship's own moves in its
+ * box, like a plane flying where it points: about 12 degrees at the
+ * keyboard's full speed, never more than MAX_TURN. Proportional to the moves
+ * rather than to the true flight path, so it reads the same at any speed.
+ */
+const TURN_PER_SPEED = 0.018; // radians per world unit/s
+const MAX_TURN = THREE.MathUtils.degToRad(15);
 const OUTLINE_WIDTH = 0.022; // world units
 const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD = new THREE.Vector3(0, 0, 1);
-/** Where the shots leave from, in the ship's own space: just ahead of the nose. */
-const MUZZLE = new THREE.Vector3(0, 0, -1.4);
+/** Where the shots leave from, in the ship's own space, for the left and right guns: under the wings, at their leading edge. */
+const GUNS = [new THREE.Vector3(-0.7, -0.15, 0.05), new THREE.Vector3(0.7, -0.15, 0.05)] as const;
 const FLASH_STEPS = 6; // how long a hit flashes the ship white
 const FLASH_COLOR = new THREE.Color(0xffffff);
 const NO_EMISSIVE = new THREE.Color(0x000000);
@@ -26,34 +35,50 @@ const FALL_DRAG = Math.exp(-1.5 * STEP); // per step, on horizontal speed only
 const FALL_SPIN = 7; // rad/s
 const FALL_NOSE_EASE = 1 - Math.exp(-4 * STEP); // how fast the nose turns to follow its fall
 
+// Barrel roll: a full turn around the nose, untouchable while it lasts, then a wait before the next.
+const BARREL_STEPS = Math.round(0.5 / STEP);
+const BARREL_WAIT_STEPS = Math.round(1 / STEP);
+const BARREL_RECHARGE_STEPS = BARREL_STEPS + BARREL_WAIT_STEPS;
+
 /**
- * The player's ship, in the camera rig's space. It follows its own steering
- * around the ship area (steer). Its nose always points exactly at
- * the reticle; it banks into the rail's curves (the part of the bank the
- * camera does not take) and into its own sideways moves. When it dies it
- * leaves the rig for world space and falls (die, fall).
+ * The player's ship. It flies in a box around the rail (see SHIP_BOX),
+ * following its own steering (steer), and is drawn in the camera rig's space,
+ * which follows it for a share of the way. It flies like a plane: it points
+ * along the rail, turned toward its own moves in the box, and banks with the
+ * rail and into its moves (orient). Its guns, on the wings, fire toward the
+ * reticle wherever it is, converging on it. When it dies it
+ * leaves the rig for world space and falls (die, fall). A barrel roll
+ * (barrelRoll) makes it untouchable for a moment.
  * Cel shaded: toon materials with a three-tone ramp plus an
  * inverted-hull outline. Four draw calls in total.
  */
 export class Ship {
   readonly object = new THREE.Group();
   // Simulation state for the current and previous step; render() interpolates between them.
-  private readonly pos = new THREE.Vector3();
+  private readonly pos = new THREE.Vector3(); // in rig space; world space once falling
   private readonly prevPos = new THREE.Vector3();
   private readonly quat = new THREE.Quaternion();
   private readonly prevQuat = new THREE.Quaternion();
   private roll = 0; // radians, positive to the left
-  private readonly vel = new THREE.Vector2(); // across its plane, world units/s
+  /** Its place in the box around the rail, across the view (x right, y up), in world units. */
+  readonly box = new THREE.Vector2();
+  private readonly vel = new THREE.Vector2(); // across the box, world units/s
   private flash = 0; // steps of hit flash left
   /** Whether it is falling in world space after its death. */
   falling = false;
   private readonly fallVel = new THREE.Vector3();
   private spin = 0;
+  private barrel = 0; // steps of barrel roll left
+  private barrelDir = 0; // 1 to the left, -1 to the right, like `roll`
+  private recharge = 0; // steps until it can roll again: the roll and the wait after it
   private readonly materials: THREE.MeshToonMaterial[];
 
   // Scratch objects, reused every step.
   private readonly look = new THREE.Matrix4();
   private readonly rollQuat = new THREE.Quaternion();
+  private readonly turnQuat = new THREE.Quaternion();
+  private readonly view = new THREE.Quaternion();
+  private readonly euler = new THREE.Euler();
   private readonly fallQuat = new THREE.Quaternion();
   private readonly scratch = new THREE.Vector3();
 
@@ -70,59 +95,96 @@ export class Ship {
     this.object.add(hullMesh, trimMesh, glowMesh, outline);
   }
 
-  /** Jump to rest, low in the middle of the ship area, ready to fly. */
-  rest(reticle: THREE.Vector3) {
+  /** Jump to rest, low in the middle of its box, ready to fly. Call after the flight's step. */
+  rest(flight: Flight) {
     this.falling = false;
     this.flash = 0;
+    this.box.set(0, SHIP_BOX_REST_Y);
     this.vel.set(0, 0);
-    this.pos.set(0, SHIP_REST_Y, -SHIP_DISTANCE);
     this.roll = 0;
-    this.aim(reticle);
+    this.barrel = 0;
+    this.recharge = 0;
+    this.orient(flight);
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
   }
 
   /**
-   * Follow `target` (its steering, on its plane) with a
-   * critically damped spring, so it settles without overshooting; bank with
-   * the rail (`restRoll`), into sideways moves and toward the side it is on.
+   * Follow `target` (its steering, in the box) with a critically damped
+   * spring, so it settles without overshooting. Call before the flight's
+   * step, which follows it, and `orient` after.
    */
-  steer(target: THREE.Vector2, reticle: THREE.Vector3, restRoll: number) {
+  steer(target: THREE.Vector2) {
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
     if (this.flash > 0) this.flash--;
+    if (this.barrel > 0) this.barrel--;
+    if (this.recharge > 0) this.recharge--;
 
     const k = FREQ * FREQ;
     const c = 2 * FREQ;
-    this.vel.x += (k * (target.x - this.pos.x) - c * this.vel.x) * STEP;
-    this.vel.y += (k * (target.y - this.pos.y) - c * this.vel.y) * STEP;
-    this.pos.x += this.vel.x * STEP;
-    this.pos.y += this.vel.y * STEP;
-    // Never out of its area, whatever the step.
-    const { halfWidth, halfHeight } = SHIP_AREA;
-    if (Math.abs(this.pos.x) > halfWidth) {
-      this.pos.x = Math.sign(this.pos.x) * halfWidth;
+    this.vel.x += (k * (target.x - this.box.x) - c * this.vel.x) * STEP;
+    this.vel.y += (k * (target.y - this.box.y) - c * this.vel.y) * STEP;
+    this.box.addScaledVector(this.vel, STEP);
+    // Never out of its box, whatever the step.
+    const { halfWidth, halfHeight } = SHIP_BOX;
+    if (Math.abs(this.box.x) > halfWidth) {
+      this.box.x = Math.sign(this.box.x) * halfWidth;
       this.vel.x = 0;
     }
-    if (Math.abs(this.pos.y) > halfHeight) {
-      this.pos.y = Math.sign(this.pos.y) * halfHeight;
+    if (Math.abs(this.box.y) > halfHeight) {
+      this.box.y = Math.sign(this.box.y) * halfHeight;
       this.vel.y = 0;
     }
-
-    const bank = restRoll - (this.vel.x / halfWidth) * BANK_PER_SPEED - this.side * BANK_PER_OFFSET;
-    this.roll += (THREE.MathUtils.clamp(bank, -MAX_BANK, MAX_BANK) - this.roll) * BANK_EASE;
-
-    this.aim(reticle);
   }
 
-  /** How far to the side of its area it is, -1 (left edge) to 1 (right edge). */
-  get side(): number {
-    return this.pos.x / SHIP_AREA.halfWidth;
+  /**
+   * Its place on screen and its attitude for the current step, from its box
+   * and the flight: the rail's direction turned toward its own moves, and the
+   * rail's bank plus its own, taken into the rig's space.
+   */
+  orient(flight: Flight) {
+    // The camera follows the box for its share; the ship moves on screen by the rest.
+    this.pos.set(this.box.x * (1 - CAMERA_FOLLOW), this.box.y * (1 - CAMERA_FOLLOW), -SHIP_DISTANCE);
+
+    const side = this.box.x / SHIP_BOX.halfWidth;
+    const bank = flight.bank - (this.vel.x / SHIP_BOX.halfWidth) * BANK_PER_SPEED - side * BANK_PER_OFFSET;
+    this.roll += (THREE.MathUtils.clamp(bank, -MAX_BANK, MAX_BANK) - this.roll) * BANK_EASE;
+    // A barrel roll turns all the way round, fast at first and settling at the end.
+    const p = 1 - this.barrel / BARREL_STEPS;
+    const barrel = this.barrel > 0 ? this.barrelDir * Math.PI * 2 * p * (2 - p) : 0;
+
+    // Right is a negative turn (three.js rotations are counterclockwise).
+    const clamp = THREE.MathUtils.clamp;
+    const yaw = clamp(-this.vel.x * TURN_PER_SPEED, -MAX_TURN, MAX_TURN);
+    const pitch = clamp(this.vel.y * TURN_PER_SPEED, -MAX_TURN, MAX_TURN);
+    flight.railAttitude(this.quat);
+    this.quat.multiply(this.turnQuat.setFromEuler(this.euler.set(pitch, yaw, 0, 'YXZ')));
+    this.quat.multiply(this.rollQuat.setFromAxisAngle(FORWARD, this.roll + barrel));
+    this.quat.premultiply(flight.attitude(this.view, BASE_PITCH).invert());
   }
 
   /** Its center for the current step, in rig space (world space once falling). */
   center(out: THREE.Vector3): THREE.Vector3 {
     return out.copy(this.pos);
+  }
+
+  /** Start a barrel roll, `dir` -1 to the left or 1 to the right, if it is ready. */
+  barrelRoll(dir: number) {
+    if (this.recharge > 0) return;
+    this.barrel = BARREL_STEPS;
+    this.barrelDir = -dir; // positive roll is to the left
+    this.recharge = BARREL_RECHARGE_STEPS;
+  }
+
+  /** Whether it is rolling, and so cannot be hit. */
+  get rolling(): boolean {
+    return this.barrel > 0;
+  }
+
+  /** How ready the next barrel roll is, 0 (just started one) to 1 (ready). */
+  get rollCharge(): number {
+    return 1 - this.recharge / BARREL_RECHARGE_STEPS;
   }
 
   /** Flash white: it was hit. */
@@ -162,9 +224,9 @@ export class Ship {
     this.quat.slerp(this.fallQuat, FALL_NOSE_EASE);
   }
 
-  /** Where shots leave from, for the current step, in rig space. */
-  muzzle(out: THREE.Vector3): THREE.Vector3 {
-    return out.copy(MUZZLE).applyQuaternion(this.quat).add(this.pos);
+  /** Where the left (0) or right (1) gun's shots leave from, for the current step, in rig space. */
+  muzzle(gun: number, out: THREE.Vector3): THREE.Vector3 {
+    return out.copy(GUNS[gun]).applyQuaternion(this.quat).add(this.pos);
   }
 
   render(alpha: number) {
@@ -172,12 +234,6 @@ export class Ship {
     this.object.quaternion.slerpQuaternions(this.prevQuat, this.quat, alpha);
     const emissive = this.flash > 0 ? FLASH_COLOR : NO_EMISSIVE;
     for (const material of this.materials) material.emissive.copy(emissive);
-  }
-
-  /** Nose (-Z) exactly toward the reticle, then roll around the nose, which keeps it pointing there. */
-  private aim(reticle: THREE.Vector3) {
-    this.quat.setFromRotationMatrix(this.look.lookAt(this.pos, reticle, UP));
-    this.quat.multiply(this.rollQuat.setFromAxisAngle(FORWARD, this.roll));
   }
 }
 

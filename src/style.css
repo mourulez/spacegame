@@ -40,12 +40,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Shield: a row of cells at the top middle, one lost per hit. */
+/* Shield, bottom left: a row of cells, one lost per hit. */
 .hud-shield {
   position: absolute;
-  top: calc(2.5vmin + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: calc(2.5vmin + env(safe-area-inset-bottom));
+  left: calc(2.5vmin + env(safe-area-inset-left));
   display: flex;
   gap: 0.6vmin;
   padding: 0.6vmin;
@@ -68,6 +67,57 @@ body {
 .hud-shield.low .hud-shield-cell.full {
   background: #ff4a3a;
   box-shadow: 0 0 0.8vmin rgb(255 74 58 / 0.8);
+}
+
+/* Barrel roll, bottom right: refills after each roll, and glows when ready. */
+.hud-roll {
+  position: absolute;
+  bottom: calc(2.5vmin + env(safe-area-inset-bottom));
+  right: calc(2.5vmin + env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 0.8vmin;
+  padding: 0.6vmin 0.9vmin;
+  border-radius: 1vmin;
+  background: rgb(10 20 40 / 0.35);
+}
+
+.hud-roll svg {
+  width: 2.6vmin;
+  height: 2.6vmin;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;
+}
+
+.hud-roll-track {
+  width: 20vmin;
+  height: 1.8vmin;
+  border-radius: 0.4vmin;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.15);
+}
+
+.hud-roll-fill {
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: rgb(255 201 74 / 0.6);
+}
+
+.hud-roll.ready svg {
+  opacity: 1;
+}
+
+.hud-roll.ready .hud-roll-track {
+  box-shadow: 0 0 0.8vmin rgb(255 201 74 / 0.8);
+}
+
+.hud-roll.ready .hud-roll-fill {
+  background: #ffc94a;
 }
 
 .fullscreen-button {

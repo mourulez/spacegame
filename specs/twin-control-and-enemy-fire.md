@@ -28,7 +28,7 @@ Decisions taken in the design discussion:
 - Touch zones are invisible (nothing drawn), and both drags are relative, like a trackpad: the finger's movement moves the object by a fixed amount, never toward the finger. Position control is much more precise for dodging than a velocity stick.
 - A finger belongs to the half it started in, even if it crosses the middle. Track each pointer id (today `Input` tracks a single drag pointer).
 - Gains: the reticle keeps today's feel (a swipe of about half the screen height crosses its area; retune `DRAG_GAIN` for the half-width zone). The ship gets an equivalent gain over its own area. Keyboard ship speed similar to the reticle's (`KEY_SPEED`), scaled to the ship's area.
-- Auto-fire stays as it is: from the ship's muzzle toward the reticle.
+- Auto-fire: from the guns under the wings, alternating, toward the reticle, so the two streams converge on it (changed after playtesting; it used to leave from the nose). Bolts are born thin and short at the gun and grow steadily over their first 50 units, so they look about as thick all the way.
 - CLAUDE.md currently says "There is no virtual joystick" and that touch drags the reticle. Once twin control is the default, rewrite that rule: two invisible relative drag zones, ship left, reticle right, nothing drawn.
 
 ## Layout (`src/game/play-area.ts`)
@@ -42,9 +42,9 @@ The ship can move into the band between the two, out of the line of fire and off
 
 ## Camera, ship, reticle, frames
 
-- **Camera:** rides the rail itself and no longer follows the ship. It keeps the rail's heading and slope and `VIEW_BANK_SHARE` of its bank. Keep a small lean (about 7°), now keyed to the ship's horizontal position instead of the reticle's. Drop the climb attitude (the camera no longer moves up and down the box).
-- **Combat frame:** with the camera on the rail, `CombatFrame` is effectively the rail's frame. The ship's moves now count in full against enemies and their bullets.
-- **Ship:** moves freely in the ship area under its own control, with the current critically damped spring (no overshoot). Keeps its size and distance (6 ahead), its share of the rail's bank (`restRoll`), its own bank into sideways moves (max 45°), and its nose pointing exactly at the reticle. Check how it looks when the ship is far from the reticle; the shots crossing the screen diagonally are expected.
+- **Camera:** rides the rail, following the ship around its box for 20% of the way by moving only (`CAMERA_FOLLOW`), so the world responds to the ship's moves; at 60 units that shifts the aim negligibly. It keeps the rail's heading and slope and `VIEW_BANK_SHARE` of its bank, plus a small lean (about 7°) keyed to the ship's horizontal position. No climb attitude.
+- **Combat frame:** the rail's own frame, not the camera's. The ship's moves count in full against enemies and their bullets.
+- **Ship:** flies freely in a box around the rail (`SHIP_BOX`, the ship area on screen once the camera's share is taken) under its own control, with a critically damped spring (no overshoot). Keeps its size and distance (6 ahead). It flies like a plane (changed after playtesting; its nose used to point at the reticle, so it skidded): its attitude is the rail's direction turned toward its own moves in the box (up to 15°, proportional to its speed in the box so it reads the same at any rail speed), with the rail's bank plus its own into sideways moves (max 45°).
 - **Reticle:** stays in screen space, moved only by its own input, never recentered. It must always be drawn over the ship (today the ship covers it when they cross). Keep it under the shots, as now.
 - **Clouds:** they never cover anything closer than `CLEAR_DISTANCE` (10). Check this still holds with the ship anywhere in its area.
 
@@ -86,7 +86,7 @@ When the shield reaches zero:
 ## Out of scope (still under discussion)
 
 - ~~Shooting enemy bullets down.~~ Done: the player's shots destroy them, except red ones.
-- A dodge action (barrel roll or dash).
+- ~~A dodge action (barrel roll or dash).~~ Done: a barrel roll (a quick sideways swipe in the left half that ends with the finger lifted, or Q/E), untouchable for 0.5 s with bullets glancing off, then 1 s before the next; its charge shows bottom right, the shield bottom left.
 - Pickups.
 - Sound, other warnings (a cue on the bullet itself, audio), and moving the shield bar next to the reticle.
 - Lock-on or aim assist for touch.

@@ -65,11 +65,28 @@ const SHIP_LIMIT = {
   y: PLAY_SLOPE.y - SHIP_HALF_HEIGHT / (SHIP_DISTANCE - SHIP_REAR),
 } as const;
 
-/** Where the ship's center can go on its plane, in world units: the ship area. */
+/** Where the ship's center can go on screen, on its plane, in world units: the ship area. */
 export const SHIP_AREA: Area = {
   halfWidth: SHIP_LIMIT.x * SHIP_DISTANCE,
   halfHeight: SHIP_LIMIT.y * SHIP_DISTANCE,
 };
+
+/**
+ * The box the ship flies in around the rail, across the view, in world units.
+ * The camera follows the ship around it for CAMERA_FOLLOW of the way, by
+ * moving only, so the world responds to the ship's moves; the ship moves on
+ * screen by the rest. The box is sized so that rest is the ship area.
+ * Enemies and their bullets stay on the rail (see CombatFrame), so the ship's
+ * moves count in full against them; the camera moves too little to shift
+ * what the reticle aims at.
+ */
+export const CAMERA_FOLLOW = 0.2;
+export const SHIP_BOX: Area = {
+  halfWidth: SHIP_AREA.halfWidth / (1 - CAMERA_FOLLOW),
+  halfHeight: SHIP_AREA.halfHeight / (1 - CAMERA_FOLLOW),
+};
+/** Where the ship rests in the box: SHIP_REST_Y on screen. */
+export const SHIP_BOX_REST_Y = SHIP_REST_Y / (1 - CAMERA_FOLLOW);
 
 /** The ship's hit sphere, in world units around its center: a little forgiving, smaller than its wingspan. */
 export const SHIP_HIT_RADIUS = 0.75;

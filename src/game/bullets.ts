@@ -12,7 +12,8 @@ import { outlineGeometry } from './toon';
  * so moving out of its path turns it back. Once past the ship it fades away.
  * The player's shots destroy them, but not the red ones: those must be
  * dodged. Otherwise the stream of shots leaving the nose, right where every
- * bullet that would hit ends up, shields the ship on its own.
+ * bullet that would hit ends up, shields the ship on its own. A ship in a
+ * barrel roll glances them off.
  */
 
 const MAX_BULLETS = 8;
@@ -38,6 +39,8 @@ const HIT_REACH = SHIP_HIT_RADIUS + RADIUS;
  */
 const WARN_TIME = 0.6;
 const WARN_OUT = HIT_REACH * 1.25;
+/** A glanced-off bullet leaves this much faster than it came. */
+const GLANCE_SPEEDUP = 1.3;
 /** Reach of the player's shots against a bullet: generous, so aiming at one is enough. */
 const SHOT_REACH = RADIUS + 0.7;
 const COLOR = new THREE.Color(0xb46cff);
@@ -67,6 +70,7 @@ export class Bullets {
 
   // Scratch objects.
   private readonly toShip = new THREE.Vector3();
+  private readonly normal = new THREE.Vector3();
   private readonly onScreen = new THREE.Vector3();
   private readonly matrix = new THREE.Matrix4();
   private readonly drawPos = new THREE.Vector3();
@@ -108,12 +112,19 @@ export class Bullets {
 
   /**
    * Move the bullets. When `ship` is given (its center, in combat space),
-   * also hit it, calling `onHit` with each bullet that does, update the
-   * warnings, start fading the ones past it, and fire a new one when due.
-   * `toRig` takes combat space to the camera rig's, to tell which enemies are
-   * on screen. Returns how many bullets hit the ship.
+   * also hit it, calling `onHit` with each bullet that reaches it, update
+   * the warnings, start fading the ones past it, and fire a new one when due.
+   * A `shielded` ship (rolling) glances bullets off instead of taking them;
+   * `onHit` is told which. `toRig` takes combat space to the camera rig's, to
+   * tell which enemies are on screen. Returns how many bullets hit the ship.
    */
-  step(enemies: Enemies, ship: THREE.Vector3 | null, toRig: THREE.Quaternion, onHit: (at: THREE.Vector3) => void): number {
+  step(
+    enemies: Enemies,
+    ship: THREE.Vector3 | null,
+    shielded: boolean,
+    toRig: THREE.Quaternion,
+    onHit: (at: THREE.Vector3, glanced: boolean) => void,
+  ): number {
     let hits = 0;
     for (const b of this.list) {
       if (!b.active) continue;
@@ -126,9 +137,19 @@ export class Bullets {
       if (!ship || b.fade > 0) continue;
 
       if (segmentHitsSphere(b.prevPos, b.pos, ship, HIT_REACH)) {
-        b.active = false;
-        onHit(b.pos);
-        hits++;
+        if (shielded) {
+          // Bounce off the ship's hit sphere, and fade away: it can no longer hit.
+          this.normal.subVectors(b.prevPos, ship).normalize();
+          b.vel.addScaledVector(this.normal, -2 * b.vel.dot(this.normal)).multiplyScalar(GLANCE_SPEEDUP);
+          b.pos.copy(b.prevPos);
+          b.warn = false;
+          b.fade = FADE_STEPS;
+          onHit(b.pos, true);
+        } else {
+          b.active = false;
+          onHit(b.pos, false);
+          hits++;
+        }
         continue;
       }
 

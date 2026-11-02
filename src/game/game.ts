@@ -8,9 +8,9 @@ import { BASE_PITCH, CameraRig } from './camera-rig';
 import { Clouds } from './clouds';
 import { CombatFrame } from './combat-frame';
 import { ENEMY_RADIUS, Enemies } from './enemies';
-import { DEATH_BURST, Explosions, HIT_BURST, KILL_BURST, POP_BURST } from './explosions';
+import { DEATH_BURST, Explosions, GLANCE_BURST, HIT_BURST, KILL_BURST, POP_BURST } from './explosions';
 import { Flight } from './flight';
-import { SHIP_AREA, SHIP_REST_Y } from './play-area';
+import { SHIP_BOX, SHIP_BOX_REST_Y } from './play-area';
 import { Reticle } from './reticle';
 import { Ship } from './ship';
 import { Shots, segmentHitsSphere } from './shots';
@@ -45,7 +45,7 @@ export class Game {
   private readonly shots = new Shots();
   private readonly explosions = new Explosions();
   // The ship and the reticle are steered separately; enemies fire back, and the ship has a shield and can go down.
-  private readonly shipSteering = new Steering(SHIP_AREA);
+  private readonly shipSteering = new Steering(SHIP_BOX);
   private readonly bullets = new Bullets();
   private readonly trail = new Trail();
   private shield = SHIELD_MAX;
@@ -62,7 +62,8 @@ export class Game {
   private readonly rigToCombat = new THREE.Quaternion();
   private readonly combatToRig = new THREE.Quaternion();
   private readonly view = new THREE.Quaternion();
-  private readonly muzzle = new THREE.Vector3();
+  private readonly guns = [new THREE.Vector3(), new THREE.Vector3()];
+  private readonly rigOrigin = new THREE.Vector3();
   private readonly target = new THREE.Vector3();
   private readonly shipCombat = new THREE.Vector3();
   private readonly shipWorld = new THREE.Vector3();
@@ -93,8 +94,8 @@ export class Game {
     this.combat.object.add(this.enemies.object, this.bullets.object, this.shots.object, this.explosions.object);
     this.scene.add(this.sky.object, this.rig.object, this.combat.object, this.trail.object);
     this.hud.addShield(SHIELD_MAX);
-    this.shipSteering.reset(0, SHIP_REST_Y);
-    this.ship.rest(this.reticle.pos);
+    this.shipSteering.reset(0, SHIP_BOX_REST_Y);
+    this.ship.rest(this.flight);
     this.combat.snap(this.flight);
 
     this.resize();
@@ -112,33 +113,38 @@ export class Game {
     const aim = this.input.takePointer(this.pointer) ? this.rig.aimPoint(this.pointer, this.aim) : null;
     this.input.takeDrag(this.drag);
     this.input.takeShipDrag(this.shipDrag);
+    const roll = this.input.takeRoll();
     if (alive) {
       this.reticle.step(this.input.aimAxis(this.aimAxis), this.drag, aim);
       this.shipSteering.step(this.input.shipAxis(this.shipAxis), this.shipDrag, null);
+      if (roll !== 0) this.ship.barrelRoll(roll);
     } else {
       this.reticle.hold();
     }
 
-    this.flight.step(alive ? this.ship.side : 0);
+    // The ship in its box, the flight (the camera following it), then the ship's attitude from both.
+    if (alive) this.ship.steer(this.shipSteering.pos);
+    this.flight.step(alive ? this.ship.box : null);
     if (alive) {
-      this.ship.steer(this.shipSteering.pos, this.reticle.pos, this.flight.restRoll);
+      this.ship.orient(this.flight);
     } else {
       this.ship.fall();
     }
     this.flight.keepInView(alive ? null : this.ship.center(this.shipWorld));
     this.combat.step(this.flight);
 
-    // Auto-fire from the ship's nose toward the reticle, both taken into combat space.
+    // Auto-fire from the guns on the wings toward the reticle, all taken into combat space.
     this.combat.fromRig(this.flight, this.rigToCombat);
+    this.combat.rigOrigin(this.flight, this.rigOrigin);
     this.combatToRig.copy(this.rigToCombat).invert();
-    this.ship.muzzle(this.muzzle).applyQuaternion(this.rigToCombat);
-    this.target.copy(this.reticle.pos).applyQuaternion(this.rigToCombat);
-    this.shots.step(this.muzzle, this.target, alive);
+    for (let gun = 0; gun < this.guns.length; gun++) this.toCombat(this.ship.muzzle(gun, this.guns[gun]));
+    this.toCombat(this.target.copy(this.reticle.pos));
+    this.shots.step(this.guns, this.target, alive);
 
     this.enemies.step(this.combat.yawRate, alive);
     // The ship's moves count in full against enemy fire: the camera stays on the rail.
-    const ship = alive ? this.ship.center(this.shipCombat).applyQuaternion(this.rigToCombat) : null;
-    const hits = this.bullets.step(this.enemies, ship, this.combatToRig, this.onBulletHit);
+    const ship = alive ? this.toCombat(this.ship.center(this.shipCombat)) : null;
+    const hits = this.bullets.step(this.enemies, ship, this.ship.rolling, this.combatToRig, this.onBulletHit);
     if (hits > 0) this.hitShip(hits);
     this.collide();
     this.explosions.step();
@@ -147,6 +153,11 @@ export class Game {
 
     if (this.dead && ++this.deadSteps >= RESTART_STEPS) this.restart();
     this.atmosphere.step();
+  }
+
+  /** Take a point from the camera rig's space to combat space, for the current step. */
+  private toCombat(point: THREE.Vector3): THREE.Vector3 {
+    return point.applyQuaternion(this.rigToCombat).add(this.rigOrigin);
   }
 
   /** The player's shots against enemy bullets, then enemies. */
@@ -170,8 +181,8 @@ export class Game {
     }
   }
 
-  private onBulletHit = (at: THREE.Vector3) => {
-    this.explosions.spawn(at, HIT_BURST);
+  private onBulletHit = (at: THREE.Vector3, glanced: boolean) => {
+    this.explosions.spawn(at, glanced ? GLANCE_BURST : HIT_BURST);
   };
 
   private hitShip(hits: number) {
@@ -204,8 +215,8 @@ export class Game {
     this.flight.halt(false);
     this.bullets.clear();
     this.rig.object.add(this.ship.object);
-    this.shipSteering.reset(0, SHIP_REST_Y);
-    this.ship.rest(this.reticle.pos);
+    this.shipSteering.reset(0, SHIP_BOX_REST_Y);
+    this.ship.rest(this.flight);
     this.reticle.object.visible = true;
   }
 
@@ -220,6 +231,7 @@ export class Game {
     this.bullets.render(alpha);
     this.trail.render(alpha);
     this.hud.setShield(this.shield);
+    this.hud.setRoll(this.ship.rollCharge);
     this.sky.update(this.rig.object.position);
     this.hud.update(frameDt);
     this.rig.object.updateMatrixWorld(); // the cloud pass runs before the main render updates it
