@@ -25,6 +25,18 @@ test('boots, runs the loop and stays offline', async ({ page, baseURL }, testInf
   expect(externalRequests).toEqual([]);
 });
 
+test('cumulus clouds prototype renders without errors', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+
+  await page.goto('/?clouds=blobs');
+  await expect(page.locator('.hud-fps')).toHaveText(/\d+ fps/);
+  await page.screenshot({ path: `screenshots/${testInfo.project.name}-clouds.png` });
+
+  expect(errors).toEqual([]);
+});
+
 test('fullscreen button matches browser support', async ({ page }) => {
   await page.goto('/');
   const supported = await page.evaluate(() => document.fullscreenEnabled);

@@ -4,6 +4,7 @@ import { FixedLoop } from '../core/loop';
 import { Hud } from '../ui/hud';
 import { Atmosphere } from './atmosphere';
 import { CameraRig } from './camera-rig';
+import { Clouds } from './clouds';
 import { CombatFrame } from './combat-frame';
 import { ENEMY_RADIUS, Enemies } from './enemies';
 import { Explosions, HIT_BURST, KILL_BURST } from './explosions';
@@ -26,6 +27,7 @@ export class Game {
   private readonly flight = new Flight();
   private readonly atmosphere: Atmosphere;
   private readonly sky: Sky;
+  private readonly clouds: Clouds | null;
   private readonly reticle = new Reticle();
   private readonly ship = new Ship();
   private readonly enemies = new Enemies();
@@ -39,6 +41,7 @@ export class Game {
   private readonly rigToCombat = new THREE.Quaternion();
   private readonly muzzle = new THREE.Vector3();
   private readonly target = new THREE.Vector3();
+  private readonly drawingBuffer = new THREE.Vector2();
 
   constructor(private readonly canvas: HTMLCanvasElement, ui: HTMLElement) {
     // At 2x pixel density and up, edges are fine without MSAA, which is costly on phones.
@@ -52,11 +55,15 @@ export class Game {
       render: (alpha, frameDt) => this.render(alpha, frameDt),
     });
 
+    const params = new URLSearchParams(location.search);
     // `?time=0.7` in the URL starts that far into the sunset (0 day, 1 dusk), for checking it without waiting.
-    const time = Number(new URLSearchParams(location.search).get('time') ?? 0);
+    const time = Number(params.get('time') ?? 0);
     this.atmosphere = new Atmosphere(Number.isFinite(time) ? time : 0);
     this.sky = new Sky(this.atmosphere);
     this.scene.add(this.atmosphere.ambient, this.atmosphere.sunLight);
+    // `?clouds=blobs` adds cumulus clouds beside the rail: a prototype, off by default until measured on phones.
+    this.clouds = params.get('clouds') === 'blobs' ? new Clouds(this.atmosphere) : null;
+    if (this.clouds) this.scene.add(this.clouds.composite);
 
     this.rig.object.add(this.ship.object, this.reticle.object);
     this.combat.object.add(this.enemies.object, this.shots.object, this.explosions.object);
@@ -76,7 +83,7 @@ export class Game {
     const aim = this.input.takePointer(this.pointer) ? this.rig.aimPoint(this.pointer, this.aim) : null;
     this.input.takeDrag(this.drag);
     this.reticle.step(this.input.axis(), this.drag, aim);
-    this.ship.step(this.reticle.pos);
+    this.ship.step(this.reticle.pos, this.flight.restRoll, this.flight.restPitch);
     this.flight.step(this.reticle.pos);
     this.combat.step(this.flight);
 
@@ -116,6 +123,10 @@ export class Game {
     this.explosions.render(alpha);
     this.sky.update(this.rig.object.position);
     this.hud.update(frameDt);
+    if (this.clouds) {
+      this.rig.object.updateMatrixWorld(); // the cloud pass runs before the main render updates it
+      this.clouds.render(this.renderer, this.rig.camera);
+    }
     this.renderer.render(this.scene, this.rig.camera);
   }
 
@@ -124,6 +135,8 @@ export class Game {
     const height = this.canvas.clientHeight;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this.renderer.setSize(width, height, false);
+    this.renderer.getDrawingBufferSize(this.drawingBuffer);
+    this.clouds?.setSize(this.drawingBuffer.x, this.drawingBuffer.y);
     this.rig.fit(width / height);
   };
 }

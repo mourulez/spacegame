@@ -21,6 +21,7 @@ const BANK_PER_FRAME_TURN = 0.8; // roll per rad/s of the rail turning: they ban
 const MAX_BANK = 1.1;
 const BANK_EASE = 1 - Math.exp(-8 * STEP);
 const HEADING_EASE = 1 - Math.exp(-10 * STEP);
+const PITCH_EASE = 1 - Math.exp(-6 * STEP);
 const OUTLINE_WIDTH = 0.07;
 const HULL_COLOR = new THREE.Color(0xc23a4a);
 const FLASH_COLOR = new THREE.Color(0xffffff);
@@ -68,14 +69,33 @@ const overtake: Path = (t, side, lane, out) => {
   return t <= OVERTAKE_DURATION;
 };
 
+/**
+ * Bursts up out of the clouds below, well ahead, nose high, climbing steeply
+ * to its lane while drifting across, then pulls away up and out. It starts
+ * below the cloud blanket wherever the camera is in the corridor (the camera
+ * is 3 to 17 above it).
+ */
+const RISE_DEPTH = -35; // below the camera: inside the clouds, low on screen
+const RISE_CLIMB = 2.6; // seconds to climb to the lane
+const RISE_DURATION = 6.5;
+const rise: Path = (t, side, lane, out) => {
+  const p = t / RISE_DURATION;
+  const climb = 1 - (1 - Math.min(t / RISE_CLIMB, 1)) ** 3; // fast out of the clouds, settling at the lane
+  const away = p > 0.7 ? ((p - 0.7) / 0.3) ** 2 : 0;
+  out.set(side * (18 - 30 * smooth(p)), RISE_DEPTH + (lane - RISE_DEPTH) * climb + 25 * away, -110 + 40 * Math.sin(p * Math.PI) - 60 * away);
+  return p <= 1;
+};
+
 /** The wave script, played in a loop. Sides alternate so every kind comes from both sides. */
 const WAVES: { path: Path; side: number; count: number; lane: number }[] = [
+  { path: rise, side: -1, count: 4, lane: 2 },
   { path: cross, side: -1, count: 4, lane: 6 },
   { path: overtake, side: 1, count: 3, lane: 4 },
   { path: swoop, side: 1, count: 3, lane: 8 },
   { path: overtake, side: -1, count: 4, lane: 6 },
   { path: cross, side: 1, count: 3, lane: 10 },
   { path: swoop, side: -1, count: 4, lane: 3 },
+  { path: rise, side: 1, count: 4, lane: 4 },
 ];
 
 interface Enemy {
@@ -88,6 +108,7 @@ interface Enemy {
   flash: number; // steps of hit flash left
   roll: number;
   heading: number; // direction of travel around y, for banking into its turns
+  pitch: number; // nose up while climbing, down while diving
   readonly pos: THREE.Vector3;
   readonly prevPos: THREE.Vector3;
   readonly quat: THREE.Quaternion;
@@ -138,6 +159,7 @@ export class Enemies {
         flash: 0,
         roll: 0,
         heading: 0,
+        pitch: 0,
         pos: new THREE.Vector3(),
         prevPos: new THREE.Vector3(),
         quat: new THREE.Quaternion(),
@@ -184,7 +206,10 @@ export class Enemies {
       const heading = (e.heading += turn);
       const bank = THREE.MathUtils.clamp(turnRate * BANK_PER_TURN + frameYawRate * BANK_PER_FRAME_TURN, -MAX_BANK, MAX_BANK);
       e.roll += (bank - e.roll) * BANK_EASE;
-      this.ahead.set(-Math.sin(heading), 0, -Math.cos(heading)).add(e.pos);
+      const climb = moving ? Math.atan2(this.ahead.y, Math.hypot(this.ahead.x, this.ahead.z)) : 0;
+      e.pitch += (climb - e.pitch) * PITCH_EASE;
+      const level = Math.cos(e.pitch);
+      this.ahead.set(-Math.sin(heading) * level, Math.sin(e.pitch), -Math.cos(heading) * level).add(e.pos);
       e.quat.setFromRotationMatrix(this.look.lookAt(e.pos, this.ahead, UP));
       e.quat.multiply(this.rollQuat.setFromAxisAngle(FORWARD, e.roll));
       if (e.t < STEP) e.prevQuat.copy(e.quat);
@@ -237,6 +262,7 @@ export class Enemies {
       e.hp = HIT_POINTS;
       e.flash = 0;
       e.roll = 0;
+      e.pitch = 0;
       spawned++;
     }
   }

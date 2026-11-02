@@ -6,9 +6,11 @@ export const SPEED = 100; // world units per second along the rail
 
 /**
  * The rail: a designed closed loop the flight follows, in world space, above
- * the cloud deck (y = 0). Its curves turn and bank the camera; its rises and
- * dips tilt it. The player never changes the heading, so aiming never moves
- * what is being aimed at.
+ * the cloud deck (y = 0). Its curves turn the camera and its rises and dips
+ * carry it up and down. The bank and slope they call for go mostly to the
+ * ship, which flies the rail's attitude at rest; the camera takes only a
+ * share, so the horizon stays steady. The player never changes the heading,
+ * so aiming never moves what is being aimed at.
  */
 const RAIL = new THREE.CatmullRomCurve3(figureEight(), true, 'centripetal');
 RAIL.arcLengthDivisions = 2000; // even speed along the whole loop
@@ -20,6 +22,13 @@ const TANGENT_SPAN = 2 / RAIL_LENGTH; // sample spacing (as a fraction of the lo
 const BANK_PER_TURN = 2.2;
 const MAX_RAIL_BANK = THREE.MathUtils.degToRad(35);
 const RAIL_BANK_EASE = 1 - Math.exp(-3 * STEP);
+/**
+ * Share of the rail's bank and of its slope the camera takes (and with it the
+ * combat frame, for the slope). The ship takes the rest, so at rest it is
+ * banked and pitched as the rail calls for, over a nearly level horizon.
+ */
+const VIEW_BANK_SHARE = 0.25;
+const VIEW_SLOPE_SHARE = 0.6;
 
 /*
  * The corridor around the rail the player moves in, following the reticle.
@@ -29,7 +38,7 @@ const RAIL_BANK_EASE = 1 - Math.exp(-3 * STEP);
 const LATERAL_RANGE = 5; // world units either side
 const VERTICAL_RANGE = 4; // world units above and below the rail
 const CORRIDOR_FREQ = 2.4; // rad/s, critically damped: eases into the edges, never overshoots
-const LEAN_ROLL = THREE.MathUtils.degToRad(22); // with the reticle at a side edge, on top of the rail's own bank
+const LEAN_ROLL = THREE.MathUtils.degToRad(22); // with the reticle at a side edge, on top of the camera's share of the rail's bank
 const LEAN_ROLL_EASE = 1 - Math.exp(-3.5 * STEP);
 /** Nose angle per climb angle while moving up or down the corridor, like an angle of attack. */
 const ATTITUDE_GAIN = 1.6;
@@ -39,7 +48,8 @@ const scratchEuler = new THREE.Euler();
 /**
  * The player's flight: along the rail at a constant speed, moved around the
  * corridor by the reticle. The camera rig rides on it, so the horizon moves
- * because the camera really turns, pitches and rolls.
+ * because the camera really turns, pitches and rolls. The ship adds the rest
+ * of the rail's bank and slope (restRoll, restPitch) to its own.
  */
 export class Flight {
   readonly pos = new THREE.Vector3();
@@ -87,6 +97,16 @@ export class Flight {
     return this.railYawRate;
   }
 
+  /** The rail's bank the camera does not take, for the ship to fly with at rest. Positive to the left. */
+  get restRoll(): number {
+    return this.railBank * (1 - VIEW_BANK_SHARE);
+  }
+
+  /** The rail's slope the camera does not take, for the ship to fly with at rest. Positive nose up. */
+  get restPitch(): number {
+    return this.railPitch * (1 - VIEW_SLOPE_SHARE);
+  }
+
   step(reticle: THREE.Vector3) {
     this.prevPos.copy(this.pos);
     this.prevYaw = this.yaw;
@@ -122,9 +142,9 @@ export class Flight {
     return out.setFromEuler(scratchEuler.set(this.pitch + pitchOffset, this.yaw, this.roll, 'YXZ'));
   }
 
-  /** The rail's direction alone, without bank or the player's lean: the combat frame's orientation. */
+  /** The rail's direction alone, as the camera takes it, without bank or the player's moves: the combat frame's orientation. */
   railAttitude(out: THREE.Quaternion): THREE.Quaternion {
-    return out.setFromEuler(scratchEuler.set(this.railPitch, this.railYaw, 0, 'YXZ'));
+    return out.setFromEuler(scratchEuler.set(this.railPitch * VIEW_SLOPE_SHARE, this.railYaw, 0, 'YXZ'));
   }
 
   /** Put `object` at the interpolated position and attitude, pitched an extra `pitchOffset`. */
@@ -164,9 +184,14 @@ export class Flight {
       this.railPoint.z - sin * this.lateral,
     );
     this.yaw = this.railYaw;
-    this.pitch = this.railPitch + Math.atan2(this.verticalVel, SPEED) * ATTITUDE_GAIN;
-    this.roll = this.railBank + this.leanRoll;
+    this.pitch = this.railPitch * VIEW_SLOPE_SHARE + Math.atan2(this.verticalVel, SPEED) * ATTITUDE_GAIN;
+    this.roll = this.railBank * VIEW_BANK_SHARE + this.leanRoll;
   }
+}
+
+/** `count` points evenly spaced along the whole rail loop, for laying out scenery around it. */
+export function railPoints(count: number): THREE.Vector3[] {
+  return RAIL.getSpacedPoints(count).slice(0, count); // the last point repeats the first
 }
 
 function fract(x: number) {
@@ -179,15 +204,19 @@ function wrapAngle(a: number): number {
 
 /**
  * Test route: a figure eight, so it turns right and left equally (a simple
- * loop would bank the same way all the time), gently rising and dipping. It
- * crosses itself in the middle, where the run starts, straight toward the
- * painted sun (-Z). Lobes are long and narrow for turns of about 500 units
- * radius at their ends.
+ * loop would bank the same way all the time), climbing and diving in long
+ * waves. It crosses itself in the middle, where the run starts, straight
+ * toward the painted sun (-Z). Lobes are long and narrow for turns of about
+ * 500 units radius at their ends.
  */
 function figureEight(): THREE.Vector3[] {
   const WIDTH = 400; // half width of each lobe
   const LENGTH = 1280; // from the crossing to the end of each lobe
-  const POINTS = 24;
+  const POINTS = 96; // enough to follow the climbs and dives smoothly
+  const WAVES = 7; // climbs and dives around the loop
+  // Heights 7 to 37: the lowest, less the corridor's 4, keeps the camera above the clouds (y = 3).
+  const HEIGHT = 22;
+  const SWELL = 15;
   // The eight crosses diagonally; rotate it so the start heads straight to -Z.
   const angle = Math.atan2(2 * WIDTH, LENGTH);
   const cos = Math.cos(angle);
@@ -197,7 +226,7 @@ function figureEight(): THREE.Vector3[] {
     const t = (i / POINTS) * Math.PI * 2;
     const x = WIDTH * Math.sin(2 * t);
     const z = -LENGTH * Math.sin(t);
-    points.push(new THREE.Vector3(x * cos + z * sin, 10 + 3 * Math.sin(3 * t), -x * sin + z * cos));
+    points.push(new THREE.Vector3(x * cos + z * sin, HEIGHT + SWELL * Math.sin(WAVES * t), -x * sin + z * cos));
   }
   return points;
 }

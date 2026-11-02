@@ -11,17 +11,20 @@ const SPRING_DAMPING = 0.7; // 1 = critically damped
 // at the keyboard's full sideways speed (about 11 units/s on the ship's plane).
 const BANK_PER_SPEED = 0.095; // radians of roll per world unit/s of lateral speed
 const BANK_PER_OFFSET = 0.2; // extra roll at the side edges; the camera already banks with the turn
-const MAX_BANK = THREE.MathUtils.degToRad(72);
+const MAX_BANK = THREE.MathUtils.degToRad(72); // the rail's bank and the player's together
 const BANK_EASE = 1 - Math.exp(-10 * STEP);
 const OUTLINE_WIDTH = 0.022; // world units
 const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD = new THREE.Vector3(0, 0, 1);
+const RIGHT = new THREE.Vector3(1, 0, 0);
 /** Where the shots leave from, in the ship's own space: just ahead of the nose. */
 const MUZZLE = new THREE.Vector3(0, 0, -1.4);
 
 /**
- * The player's ship. It chases the reticle (see shipTarget) and always points
- * its nose at it. Cel shaded: toon materials with a three-tone ramp plus an
+ * The player's ship. It chases the reticle (see shipTarget) and points its
+ * nose at it, banked and pitched as the rail calls for at rest (the part of
+ * it the camera does not take), plus its own banking into sideways moves.
+ * Cel shaded: toon materials with a three-tone ramp plus an
  * inverted-hull outline. Four draw calls in total.
  */
 export class Ship {
@@ -33,11 +36,13 @@ export class Ship {
   private readonly prevQuat = new THREE.Quaternion();
   private readonly vel = new THREE.Vector2(); // world units per second
   private roll = 0; // radians, positive to the left
+  private pitch = 0; // radians, positive nose up, on top of pointing at the reticle
 
   // Scratch objects, reused every step.
   private readonly target = new THREE.Vector3();
   private readonly look = new THREE.Matrix4();
   private readonly rollQuat = new THREE.Quaternion();
+  private readonly pitchQuat = new THREE.Quaternion();
 
   constructor() {
     const ramp = toonRamp();
@@ -54,13 +59,15 @@ export class Ship {
     shipTarget(reticle, this.pos);
     this.vel.set(0, 0);
     this.roll = 0;
+    this.pitch = 0;
     this.aim(reticle);
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
     this.render(1);
   }
 
-  step(reticle: THREE.Vector3) {
+  /** `restRoll`, `restPitch`: the rail's bank and slope left for the ship (see Flight). */
+  step(reticle: THREE.Vector3, restRoll: number, restPitch: number) {
     this.prevPos.copy(this.pos);
     this.prevQuat.copy(this.quat);
 
@@ -84,9 +91,10 @@ export class Ship {
       this.vel.y = 0;
     }
 
-    // Bank into lateral movement, and into the turn when held at a side.
-    const bank = -this.vel.x * BANK_PER_SPEED - (this.pos.x / limitX) * BANK_PER_OFFSET;
+    // Bank with the rail, plus into lateral movement, and into the turn when held at a side.
+    const bank = restRoll - this.vel.x * BANK_PER_SPEED - (this.pos.x / limitX) * BANK_PER_OFFSET;
     this.roll += (THREE.MathUtils.clamp(bank, -MAX_BANK, MAX_BANK) - this.roll) * BANK_EASE;
+    this.pitch = restPitch; // the rail's slope changes smoothly already
 
     this.aim(reticle);
   }
@@ -101,9 +109,10 @@ export class Ship {
     this.object.quaternion.slerpQuaternions(this.prevQuat, this.quat, alpha);
   }
 
-  /** Nose (-Z) toward the reticle, then roll around the nose. */
+  /** Nose (-Z) toward the reticle, pitched with the rail, then roll around the nose. */
   private aim(reticle: THREE.Vector3) {
     this.quat.setFromRotationMatrix(this.look.lookAt(this.pos, reticle, UP));
+    this.quat.multiply(this.pitchQuat.setFromAxisAngle(RIGHT, this.pitch));
     this.quat.multiply(this.rollQuat.setFromAxisAngle(FORWARD, this.roll));
   }
 }
