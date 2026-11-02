@@ -67,7 +67,7 @@ export class Game {
     this.rig.object.add(this.ship.object, this.reticle.object);
     this.combat.object.add(this.enemies.object, this.shots.object, this.explosions.object);
     this.scene.add(this.sky.object, this.rig.object, this.combat.object);
-    this.ship.snap(this.reticle.pos);
+    this.ship.snap(this.reticle.pos, this.flight);
     this.combat.snap(this.flight);
 
     this.resize();
@@ -82,8 +82,8 @@ export class Game {
     const aim = this.input.takePointer(this.pointer) ? this.rig.aimPoint(this.pointer, this.aim) : null;
     this.input.takeDrag(this.drag);
     this.reticle.step(this.input.axis(), this.drag, aim);
-    this.ship.step(this.reticle.pos, this.flight.restRoll, this.flight.restPitch);
     this.flight.step(this.reticle.pos);
+    this.ship.step(this.reticle.pos, this.flight);
     this.combat.step(this.flight);
 
     // Auto-fire from the ship's nose toward the reticle, both taken into combat space.

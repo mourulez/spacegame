@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STEP } from '../core/loop';
+import { RETICLE_ORDER } from './reticle';
 import { outlineMaterial } from './toon';
 
 /*
@@ -44,6 +45,9 @@ export class Shots {
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.frustumCulled = false;
       mesh.count = 0;
+      // Fully opaque, but in the transparent pass so they are drawn after the reticle, over it.
+      (mesh.material as THREE.Material).transparent = true;
+      mesh.renderOrder = RETICLE_ORDER + 1;
     }
     this.object.add(...this.meshes);
 

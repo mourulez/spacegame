@@ -72,11 +72,11 @@ const overtake: Path = (t, side, lane, out) => {
 /**
  * Bursts up out of the clouds below, well ahead, nose high, climbing steeply
  * to its lane while drifting across, then pulls away up and out. It starts
- * below the cloud blanket wherever the camera is in the corridor (the camera
- * is 3 to 17 above it).
+ * below the cloud blanket wherever the camera is (5 to 41 above it,
+ * along the rail and across the box).
  */
-const RISE_DEPTH = -35; // below the camera: inside the clouds, low on screen
-const RISE_CLIMB = 2.6; // seconds to climb to the lane
+const RISE_DEPTH = -60; // below the camera: under the clouds even at the rail's highest
+const RISE_CLIMB = 3; // seconds to climb to the lane
 const RISE_DURATION = 6.5;
 const rise: Path = (t, side, lane, out) => {
   const p = t / RISE_DURATION;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import skyUrl from '../assets/textures/sky.jpg';
-import { type Atmosphere, HAZE_DISTANCE } from './atmosphere';
+import { type Atmosphere, CLOUD_SPEEDUP, HAZE_DISTANCE } from './atmosphere';
 import { fractalNoise } from './noise';
 
 const RADIUS = 400; // must stay inside the camera's far plane
@@ -147,16 +147,13 @@ export class Sky {
     this.object.frustumCulled = false;
   }
 
-  /** Follow the camera: center the dome on it and move the cloud deck under it. */
+  /** Follow the camera: center the dome on it and move the cloud deck under it, CLOUD_SPEEDUP times faster. */
   update(camera: THREE.Vector3) {
     this.object.position.copy(camera);
     this.altitude.value = Math.max(camera.y, 0.5);
-    this.deckOffset.value.set(
-      fract(camera.x / DECK_SCALE_A),
-      fract(camera.z / DECK_SCALE_A),
-      fract(camera.x / DECK_SCALE_B),
-      fract(camera.z / DECK_SCALE_B),
-    );
+    const x = camera.x * CLOUD_SPEEDUP;
+    const z = camera.z * CLOUD_SPEEDUP;
+    this.deckOffset.value.set(fract(x / DECK_SCALE_A), fract(z / DECK_SCALE_A), fract(x / DECK_SCALE_B), fract(z / DECK_SCALE_B));
   }
 }
 

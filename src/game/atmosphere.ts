@@ -11,6 +11,13 @@ import { STEP } from '../core/loop';
 /** Distance over which clouds fade into the haze (about 63% at this distance). Short, as in a milky sky. */
 export const HAZE_DISTANCE = 140;
 
+/**
+ * The clouds below pass this many times faster than the flight really goes,
+ * for a stronger sense of speed. Scenery only: the flight, enemies and shots
+ * keep their real speed.
+ */
+export const CLOUD_SPEEDUP = 1.6;
+
 /** Seconds of play from full day to dusk. The sky then stays at dusk. */
 const SUNSET_DURATION = 120;
 

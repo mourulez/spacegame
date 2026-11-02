@@ -8,10 +8,13 @@ const KEY_EASE = 1 - Math.exp(-25 * STEP); // per-step blend toward the key velo
 /**
  * The reticle is drawn this close to the camera, scaled down to the same size
  * on screen: just behind the ship, so the ship covers it, and in front of any
- * scenery, so nothing else does, using the depth buffer alone.
+ * scenery, enemy or cloud, so none of them does. It writes no depth and is
+ * drawn just before the shots, so they always show over it.
  */
 const DRAW_DISTANCE = 9;
 const DRAW_SCALE = DRAW_DISTANCE / AIM_DISTANCE;
+/** Draw order in the transparent pass: after the clouds (-1) and explosions (0), before the shots. */
+export const RETICLE_ORDER = 1;
 /** Aim-plane units moved per viewport height of touch drag: a swipe of about half the screen height crosses the play area. */
 const DRAG_GAIN = 2.6 * AIM_AREA.halfHeight * 2;
 
@@ -37,8 +40,10 @@ export class Reticle {
       tick(-Math.PI / 2),
       new THREE.CircleGeometry(r * 0.07, 12),
     ]);
-    const material = new THREE.MeshBasicMaterial({ color: 0xff2d2d, toneMapped: false });
+    // In the transparent pass, after the sky, clouds and effects; see RETICLE_ORDER.
+    const material = new THREE.MeshBasicMaterial({ color: 0xff2d2d, toneMapped: false, transparent: true, depthWrite: false });
     this.object = new THREE.Mesh(geometry, material);
+    this.object.renderOrder = RETICLE_ORDER;
     this.object.scale.setScalar(DRAW_SCALE);
     this.render(1);
   }

@@ -6,7 +6,7 @@ import type { Flight } from './flight';
  * The space enemies and shots live in: it rides with the player and points
  * along the rail (its heading and slope, without the bank or the player's
  * lean). Waves are laid out in it, so they play out the same way on every
- * run, and the player moving around the corridor never shifts them away
+ * run, and the player moving around the box never shifts them away
  * from the reticle.
  *
  * Combat space: origin at the player's camera, x right, y up, -z ahead.

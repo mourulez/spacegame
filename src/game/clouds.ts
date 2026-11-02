@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { type Atmosphere, HAZE_DISTANCE } from './atmosphere';
+import { type Atmosphere, CLOUD_SPEEDUP, HAZE_DISTANCE } from './atmosphere';
 import { railPoints } from './flight';
 import { fractalNoise, mulberry32 } from './noise';
 
@@ -31,7 +31,7 @@ const PUFF_RADIUS = { min: 10, max: 30 } as const;
 const PUFF_FLATTEN = { min: 0.4, max: 0.8 } as const;
 /**
  * Heights the puffs' tops reach, rolling between them in slow swells. The
- * camera never goes below y = 3 (the rail's lowest point minus the corridor)
+ * camera never goes below y = 5 (the rail's lowest point minus its way down the box)
  * and the ship sits up to about 2 below it, so the highest tops pass just
  * under the ship. The cloud deck plane at y = 0 carries the blanket on beyond
  * the distance it is drawn to.
@@ -66,6 +66,9 @@ export class Clouds {
   /** Lays the clouds over the scene. Add it to the main scene. */
   readonly composite: THREE.Mesh;
 
+  // The blanket, laid out in its own space, which the camera crosses CLOUD_SPEEDUP times
+  // faster: it is shifted back by the rest of the camera's position, so the shift
+  // depends on where the flight is, not on how long it has flown, and never builds up.
   private readonly chunks = new THREE.Scene();
   // The main camera's view, but only as far as the clouds are drawn, so the far chunks are culled.
   private readonly camera = new THREE.PerspectiveCamera();
@@ -262,6 +265,8 @@ export class Clouds {
 
   /** Draw and blur the clouds for this frame. Call before rendering the main scene, with the camera's world matrix up to date. */
   render(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera) {
+    const shift = 1 - CLOUD_SPEEDUP;
+    this.chunks.position.set(camera.matrixWorld.elements[12] * shift, 0, camera.matrixWorld.elements[14] * shift);
     this.camera.fov = camera.fov;
     this.camera.aspect = camera.aspect;
     this.camera.near = camera.near;
@@ -318,13 +323,15 @@ function screenTriangle(): THREE.BufferGeometry {
 function layout(): THREE.Matrix4[][] {
   const random = mulberry32(17);
   const lerp = THREE.MathUtils.lerp;
-  const bounds = new THREE.Box3().setFromPoints(railPoints(400)).expandByScalar(LAYOUT_MARGIN);
+  // The camera crosses the blanket's space at CLOUD_SPEEDUP times its own position.
+  const inBlanket = (points: THREE.Vector3[]) => points.map((p) => p.set(p.x * CLOUD_SPEEDUP, p.y, p.z * CLOUD_SPEEDUP));
+  const bounds = new THREE.Box3().setFromPoints(inBlanket(railPoints(400))).expandByScalar(LAYOUT_MARGIN);
   const chunks = new Map<string, THREE.Matrix4[]>();
   const position = new THREE.Vector3();
   const scale = new THREE.Vector3();
   const rotation = new THREE.Quaternion();
 
-  const rail = railPoints(1200);
+  const rail = inBlanket(railPoints(1200));
   const nearRail = (x: number, z: number) => rail.some((p) => Math.hypot(p.x - x, p.z - z) < MOUND_RAIL_CLEARANCE);
 
   for (let gz = bounds.min.z; gz < bounds.max.z; gz += PUFF_SPACING) {

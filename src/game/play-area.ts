@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-
 /*
  * Gameplay layout, in the camera rig's space: the camera sits at the origin
  * looking down -Z. Sizes on screen are given as slopes (offset / distance from
@@ -31,21 +29,16 @@ export const AIM_AREA = {
 export const SHIP_DISTANCE = 6;
 
 /**
- * Where the ship rests relative to the reticle, as a slope: just below it. It
- * lags behind when the reticle moves fast, and the edges of the play area stop
- * it before the reticle, so the two can cross.
+ * How far below the middle of the screen the ship sits with the reticle
+ * centered, in world units on its plane: just below the reticle, so it never
+ * hides it at rest. Seen from the camera, which looks a little up, it is then
+ * on the rail's line ahead.
  */
-const SHIP_OFFSET_Y = -0.14;
-/**
- * Share of the reticle's sideways position the ship follows. Below 1 it stays
- * a little nearer the center, so it angles out toward the reticle: the same
- * amount to either side, and straight ahead with the reticle in the middle.
- */
-const SHIP_FOLLOW_X = 0.85;
+export const SHIP_REST_Y = -0.84;
 
 /** Ship extents from its center (including outline and banking), and how far it reaches toward the camera. */
 const SHIP_HALF_WIDTH = 1.15;
-const SHIP_HALF_HEIGHT = 1.1; // a wingtip at the ship's full bank
+const SHIP_HALF_HEIGHT = 0.85; // a wingtip at the ship's full bank (45 degrees)
 const SHIP_REAR = 1.05;
 
 /** How far the ship's center can go, as slopes, keeping the ship whole inside the play area. */
@@ -53,11 +46,3 @@ export const SHIP_LIMIT = {
   x: PLAY_SLOPE.x - SHIP_HALF_WIDTH / (SHIP_DISTANCE - SHIP_REAR),
   y: PLAY_SLOPE.y - SHIP_HALF_HEIGHT / (SHIP_DISTANCE - SHIP_REAR),
 } as const;
-
-/** Where the ship wants to be for a reticle at `reticle` (z is ignored). */
-export function shipTarget(reticle: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-  const clamp = THREE.MathUtils.clamp;
-  const x = clamp((reticle.x / AIM_DISTANCE) * SHIP_FOLLOW_X, -SHIP_LIMIT.x, SHIP_LIMIT.x);
-  const y = clamp(reticle.y / AIM_DISTANCE + SHIP_OFFSET_Y, -SHIP_LIMIT.y, SHIP_LIMIT.y);
-  return out.set(x * SHIP_DISTANCE, y * SHIP_DISTANCE, -SHIP_DISTANCE);
-}
