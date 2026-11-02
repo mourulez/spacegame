@@ -27,7 +27,7 @@ export class Game {
   private readonly flight = new Flight();
   private readonly atmosphere: Atmosphere;
   private readonly sky: Sky;
-  private readonly clouds: Clouds | null;
+  private readonly clouds: Clouds;
   private readonly reticle = new Reticle();
   private readonly ship = new Ship();
   private readonly enemies = new Enemies();
@@ -61,9 +61,8 @@ export class Game {
     this.atmosphere = new Atmosphere(Number.isFinite(time) ? time : 0);
     this.sky = new Sky(this.atmosphere);
     this.scene.add(this.atmosphere.ambient, this.atmosphere.sunLight);
-    // `?clouds=blobs` adds cumulus clouds beside the rail: a prototype, off by default until measured on phones.
-    this.clouds = params.get('clouds') === 'blobs' ? new Clouds(this.atmosphere) : null;
-    if (this.clouds) this.scene.add(this.clouds.composite);
+    this.clouds = new Clouds(this.atmosphere);
+    this.scene.add(this.clouds.composite);
 
     this.rig.object.add(this.ship.object, this.reticle.object);
     this.combat.object.add(this.enemies.object, this.shots.object, this.explosions.object);
@@ -123,10 +122,8 @@ export class Game {
     this.explosions.render(alpha);
     this.sky.update(this.rig.object.position);
     this.hud.update(frameDt);
-    if (this.clouds) {
-      this.rig.object.updateMatrixWorld(); // the cloud pass runs before the main render updates it
-      this.clouds.render(this.renderer, this.rig.camera);
-    }
+    this.rig.object.updateMatrixWorld(); // the cloud pass runs before the main render updates it
+    this.clouds.render(this.renderer, this.rig.camera);
     this.renderer.render(this.scene, this.rig.camera);
   }
 
@@ -136,7 +133,7 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this.renderer.setSize(width, height, false);
     this.renderer.getDrawingBufferSize(this.drawingBuffer);
-    this.clouds?.setSize(this.drawingBuffer.x, this.drawingBuffer.y);
+    this.clouds.setSize(this.drawingBuffer.x, this.drawingBuffer.y);
     this.rig.fit(width / height);
   };
 }
