@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import skyUrl from '../assets/textures/sky.jpg';
-import { CLOUD_PALETTE, HAZE_COLOR, HAZE_DISTANCE, SKY_PALETTE } from './atmosphere';
+import { type Atmosphere, HAZE_DISTANCE } from './atmosphere';
 import { fractalNoise } from './noise';
 
 const RADIUS = 400; // must stay inside the camera's far plane
 
 /*
  * The painted sky (src/assets/textures/sky.jpg, source in art/) is grayscale on
- * purpose: its brightness is mapped to SKY_PALETTE, so a sunset or a storm is
- * just another palette. Its bottom edge is the horizon.
+ * purpose: its brightness is mapped to the current atmosphere's sky colors, so
+ * the time of day can change it. Its bottom edge is the horizon.
  */
 
 /** Painted brightness taken as black and as white, before applying the palette. */
@@ -41,24 +41,22 @@ export class Sky {
   // Kept small so the shader's float precision holds however far the flight goes.
   private readonly deckOffset = { value: new THREE.Vector4() };
 
-  constructor() {
+  constructor(atmosphere: Atmosphere) {
+    // Colors are the atmosphere's own objects, so they follow the time of day.
     const uniforms = {
       painting: { value: null as THREE.Texture | null },
       paintingReady: { value: 0 },
-      shadow: { value: new THREE.Color(SKY_PALETTE.shadow) },
-      mid: { value: new THREE.Color(SKY_PALETTE.mid) },
-      light: { value: new THREE.Color(SKY_PALETTE.light) },
+      shadow: { value: atmosphere.sky[0] },
+      mid: { value: atmosphere.sky[1] },
+      light: { value: atmosphere.sky[2] },
       levels: { value: new THREE.Vector2(LEVELS.black, LEVELS.white) },
-      // Plain gradient, shown until the painting loads.
-      zenith: { value: new THREE.Color(0x2a66d4) },
-      horizon: { value: new THREE.Color(0xa8d2fb) },
-      horizonGlow: { value: new THREE.Color(0xffffff) },
-      haze: { value: new THREE.Color(HAZE_COLOR) },
+      horizonGlow: { value: atmosphere.horizonGlow },
+      haze: { value: atmosphere.haze },
       hazeDistance: { value: HAZE_DISTANCE },
       deck: { value: deckTexture() },
-      cloudShadow: { value: new THREE.Color(CLOUD_PALETTE.shadow) },
-      cloudMid: { value: new THREE.Color(CLOUD_PALETTE.mid) },
-      cloudLight: { value: new THREE.Color(CLOUD_PALETTE.light) },
+      cloudShadow: { value: atmosphere.cloud[0] },
+      cloudMid: { value: atmosphere.cloud[1] },
+      cloudLight: { value: atmosphere.cloud[2] },
       altitude: this.altitude,
       deckOffset: this.deckOffset,
     };
@@ -99,8 +97,6 @@ export class Sky {
         uniform vec3 mid;
         uniform vec3 light;
         uniform vec2 levels;
-        uniform vec3 zenith;
-        uniform vec3 horizon;
         uniform vec3 horizonGlow;
         uniform vec3 haze;
         uniform float hazeDistance;
@@ -122,7 +118,8 @@ export class Sky {
           float e = dir.y; // sine of the elevation angle
           vec3 color;
           if (e > 0.0) {
-            vec3 gradient = mix(horizon, zenith, pow(clamp(e / 0.7, 0.0, 1.0), 0.6));
+            // Plain gradient until the painting loads.
+            vec3 gradient = mix(light, shadow, pow(clamp(e / 0.7, 0.0, 1.0), 0.6));
             float painted = clamp((texture2D(painting, vPaintingUv).r - levels.x) / (levels.y - levels.x), 0.0, 1.0);
             color = mix(gradient, ramp(painted, shadow, mid, light), paintingReady);
             // Atmospheric haze toward the horizon.

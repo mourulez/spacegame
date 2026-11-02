@@ -7,10 +7,12 @@ import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from 
 // underdamped so fast moves overshoot a little and the ship can cross the reticle.
 const SPRING_FREQ = 13; // rad/s
 const SPRING_DAMPING = 0.7; // 1 = critically damped
-const BANK_PER_SPEED = 0.05; // radians of roll per world unit/s of lateral speed
-const BANK_PER_OFFSET = 0.1; // extra roll at the side edges; the camera already banks with the turn
-const MAX_BANK = 1.0;
-const BANK_EASE = 1 - Math.exp(-12 * STEP);
+// Marked roll into sideways moves, After Burner style but milder: about 60 degrees
+// at the keyboard's full sideways speed (about 11 units/s on the ship's plane).
+const BANK_PER_SPEED = 0.095; // radians of roll per world unit/s of lateral speed
+const BANK_PER_OFFSET = 0.2; // extra roll at the side edges; the camera already banks with the turn
+const MAX_BANK = THREE.MathUtils.degToRad(72);
+const BANK_EASE = 1 - Math.exp(-10 * STEP);
 const OUTLINE_WIDTH = 0.022; // world units
 const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD = new THREE.Vector3(0, 0, 1);

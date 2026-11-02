@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Input } from '../core/input';
 import { FixedLoop } from '../core/loop';
 import { Hud } from '../ui/hud';
+import { Atmosphere } from './atmosphere';
 import { CameraRig } from './camera-rig';
 import { CombatFrame } from './combat-frame';
 import { ENEMY_RADIUS, Enemies } from './enemies';
@@ -23,7 +24,8 @@ export class Game {
   private readonly input: Input;
   private readonly hud: Hud;
   private readonly flight = new Flight();
-  private readonly sky = new Sky();
+  private readonly atmosphere: Atmosphere;
+  private readonly sky: Sky;
   private readonly reticle = new Reticle();
   private readonly ship = new Ship();
   private readonly enemies = new Enemies();
@@ -50,10 +52,11 @@ export class Game {
       render: (alpha, frameDt) => this.render(alpha, frameDt),
     });
 
-    this.scene.add(new THREE.AmbientLight(0xdfeaff, 1.1));
-    const sun = new THREE.DirectionalLight(0xfff6e8, 2.2);
-    sun.position.set(-3, 6, 4);
-    this.scene.add(sun);
+    // `?time=0.7` in the URL starts that far into the sunset (0 day, 1 dusk), for checking it without waiting.
+    const time = Number(new URLSearchParams(location.search).get('time') ?? 0);
+    this.atmosphere = new Atmosphere(Number.isFinite(time) ? time : 0);
+    this.sky = new Sky(this.atmosphere);
+    this.scene.add(this.atmosphere.ambient, this.atmosphere.sunLight);
 
     this.rig.object.add(this.ship.object, this.reticle.object);
     this.combat.object.add(this.enemies.object, this.shots.object, this.explosions.object);
@@ -86,6 +89,7 @@ export class Game {
     this.enemies.step(this.combat.yawRate);
     this.collide();
     this.explosions.step();
+    this.atmosphere.step();
   }
 
   private collide() {

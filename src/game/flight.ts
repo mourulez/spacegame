@@ -10,21 +10,7 @@ export const SPEED = 100; // world units per second along the rail
  * dips tilt it. The player never changes the heading, so aiming never moves
  * what is being aimed at.
  */
-const RAIL = new THREE.CatmullRomCurve3(
-  [
-    new THREE.Vector3(0, 9, 0),
-    new THREE.Vector3(0, 10, -700),
-    new THREE.Vector3(250, 13, -1250),
-    new THREE.Vector3(800, 8, -1450),
-    new THREE.Vector3(1350, 12, -1150),
-    new THREE.Vector3(1550, 9, -550),
-    new THREE.Vector3(1300, 13, 100),
-    new THREE.Vector3(750, 8, 450),
-    new THREE.Vector3(200, 11, 400),
-  ],
-  true,
-  'centripetal',
-);
+const RAIL = new THREE.CatmullRomCurve3(figureEight(), true, 'centripetal');
 RAIL.arcLengthDivisions = 2000; // even speed along the whole loop
 RAIL.updateArcLengths();
 const RAIL_LENGTH = RAIL.getLength();
@@ -43,7 +29,7 @@ const RAIL_BANK_EASE = 1 - Math.exp(-3 * STEP);
 const LATERAL_RANGE = 5; // world units either side
 const VERTICAL_RANGE = 4; // world units above and below the rail
 const CORRIDOR_FREQ = 2.4; // rad/s, critically damped: eases into the edges, never overshoots
-const LEAN_ROLL = THREE.MathUtils.degToRad(10); // with the reticle at a side edge
+const LEAN_ROLL = THREE.MathUtils.degToRad(22); // with the reticle at a side edge, on top of the rail's own bank
 const LEAN_ROLL_EASE = 1 - Math.exp(-3.5 * STEP);
 /** Nose angle per climb angle while moving up or down the corridor, like an angle of attack. */
 const ATTITUDE_GAIN = 1.6;
@@ -190,3 +176,29 @@ function fract(x: number) {
 function wrapAngle(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a));
 }
+
+/**
+ * Test route: a figure eight, so it turns right and left equally (a simple
+ * loop would bank the same way all the time), gently rising and dipping. It
+ * crosses itself in the middle, where the run starts, straight toward the
+ * painted sun (-Z). Lobes are long and narrow for turns of about 500 units
+ * radius at their ends.
+ */
+function figureEight(): THREE.Vector3[] {
+  const WIDTH = 400; // half width of each lobe
+  const LENGTH = 1280; // from the crossing to the end of each lobe
+  const POINTS = 24;
+  // The eight crosses diagonally; rotate it so the start heads straight to -Z.
+  const angle = Math.atan2(2 * WIDTH, LENGTH);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i < POINTS; i++) {
+    const t = (i / POINTS) * Math.PI * 2;
+    const x = WIDTH * Math.sin(2 * t);
+    const z = -LENGTH * Math.sin(t);
+    points.push(new THREE.Vector3(x * cos + z * sin, 10 + 3 * Math.sin(3 * t), -x * sin + z * cos));
+  }
+  return points;
+}
+
