@@ -14,6 +14,11 @@ const SHIP_KEYS: Record<string, [number, number]> = {
 
 /** Barrel roll keys: left and right. */
 const ROLL_KEYS: Record<string, number> = { KeyQ: -1, KeyE: 1 };
+/**
+ * How far a key barrel roll moves the ship sideways, as a touch drag in
+ * viewport heights: about a typical swipe, which moves the ship as it rolls.
+ */
+const KEY_ROLL_SHIFT = 0.18;
 
 /**
  * A swipe in the ship's half of the screen: a whole touch, from finger down
@@ -54,7 +59,8 @@ interface Drag {
  *   half even if it crosses the middle. Nothing is drawn for the zones.
  *
  * Barrel rolls (takeRoll): Q and E, or a quick sideways swipe in the ship's
- * half that ends with the finger lifted.
+ * half that ends with the finger lifted. Either moves the ship sideways too:
+ * the swipe by its own drag, the keys by about as much.
  *
  * Pointer input accumulates between simulation steps and is consumed by the
  * step, so it is applied at a fixed rate whatever the frame or event rate.
@@ -67,6 +73,8 @@ export class Input {
   private readonly shipDrag: Vec2 = { x: 0, y: 0 };
   // Barrel roll asked for since the last step: -1 left, 1 right, 0 none.
   private pendingRoll = 0;
+  // The sideways move that goes with it if it starts, as a touch drag: none for a swipe, which made its own.
+  private pendingRollShift = 0;
   // Latest mouse position in normalized device coordinates, and whether it is new.
   private pointerX = 0;
   private pointerY = 0;
@@ -78,7 +86,10 @@ export class Input {
         this.keys.add(e.code);
         e.preventDefault();
       } else if (e.code in ROLL_KEYS) {
-        if (!e.repeat) this.pendingRoll = ROLL_KEYS[e.code];
+        if (!e.repeat) {
+          this.pendingRoll = ROLL_KEYS[e.code];
+          this.pendingRollShift = this.pendingRoll * KEY_ROLL_SHIFT;
+        }
         e.preventDefault();
       }
     });
@@ -120,10 +131,15 @@ export class Input {
     take(this.shipDrag, out);
   }
 
-  /** The barrel roll asked for since the last call: -1 left, 1 right, 0 none. */
-  takeRoll(): number {
+  /**
+   * The barrel roll asked for since the last call: -1 left, 1 right, 0 none.
+   * `shift` gets the sideways move to add to the ship's drag if it starts.
+   */
+  takeRoll(shift: Vec2): number {
     const roll = this.pendingRoll;
-    this.pendingRoll = 0;
+    shift.x = this.pendingRollShift;
+    shift.y = 0;
+    this.pendingRoll = this.pendingRollShift = 0;
     return roll;
   }
 
@@ -179,7 +195,10 @@ export class Input {
     const height = this.target.clientHeight;
     const dx = (e.clientX - drag.startX) / height;
     const dy = (e.clientY - drag.startY) / height;
-    if (Math.abs(dx) >= SWIPE.distance && Math.abs(dx) > 2 * Math.abs(dy)) this.pendingRoll = Math.sign(dx);
+    if (Math.abs(dx) >= SWIPE.distance && Math.abs(dx) > 2 * Math.abs(dy)) {
+      this.pendingRoll = Math.sign(dx);
+      this.pendingRollShift = 0;
+    }
   };
 
   private onPointerCancel = (e: PointerEvent) => {

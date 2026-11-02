@@ -56,6 +56,7 @@ export class Game {
   private readonly pointer = { x: 0, y: 0 };
   private readonly drag = { x: 0, y: 0 };
   private readonly shipDrag = { x: 0, y: 0 };
+  private readonly rollShift = { x: 0, y: 0 };
   private readonly aimAxis = { x: 0, y: 0 };
   private readonly shipAxis = { x: 0, y: 0 };
   private readonly aim = new THREE.Vector2();
@@ -113,11 +114,12 @@ export class Game {
     const aim = this.input.takePointer(this.pointer) ? this.rig.aimPoint(this.pointer, this.aim) : null;
     this.input.takeDrag(this.drag);
     this.input.takeShipDrag(this.shipDrag);
-    const roll = this.input.takeRoll();
+    const roll = this.input.takeRoll(this.rollShift);
     if (alive) {
       this.reticle.step(this.input.aimAxis(this.aimAxis), this.drag, aim);
+      // A barrel roll that starts carries the ship sideways with it.
+      if (roll !== 0 && this.ship.barrelRoll(roll)) this.shipDrag.x += this.rollShift.x;
       this.shipSteering.step(this.input.shipAxis(this.shipAxis), this.shipDrag, null);
-      if (roll !== 0) this.ship.barrelRoll(roll);
     } else {
       this.reticle.hold();
     }

@@ -169,12 +169,13 @@ export class Ship {
     return out.copy(this.pos);
   }
 
-  /** Start a barrel roll, `dir` -1 to the left or 1 to the right, if it is ready. */
-  barrelRoll(dir: number) {
-    if (this.recharge > 0) return;
+  /** Start a barrel roll, `dir` -1 to the left or 1 to the right, if it is ready. Returns whether it started. */
+  barrelRoll(dir: number): boolean {
+    if (this.recharge > 0) return false;
     this.barrel = BARREL_STEPS;
     this.barrelDir = -dir; // positive roll is to the left
     this.recharge = BARREL_RECHARGE_STEPS;
+    return true;
   }
 
   /** Whether it is rolling, and so cannot be hit. */

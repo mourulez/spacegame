@@ -104,6 +104,7 @@ interface Enemy {
   side: number;
   lane: number;
   t: number; // seconds into its path; negative while waiting its turn in the wave
+  fresh: boolean; // not yet stepped on its path: nothing to interpolate or turn from
   hp: number;
   flash: number; // steps of hit flash left
   roll: number;
@@ -155,6 +156,7 @@ export class Enemies {
         side: 1,
         lane: 0,
         t: 0,
+        fresh: false,
         hp: 0,
         flash: 0,
         roll: 0,
@@ -188,8 +190,11 @@ export class Enemies {
         e.active = false;
         continue;
       }
-      if (e.t < STEP) {
+      const fresh = e.fresh;
+      e.fresh = false;
+      if (fresh) {
         // First step on the path: nothing to interpolate from or turn from yet.
+        // A flag, not a check on `t`: the wave's leader starts at t = 0 and is already at STEP here.
         e.prevPos.copy(e.pos);
         e.path(e.t + STEP, e.side, e.lane, this.ahead);
         e.heading = Math.atan2(e.pos.x - this.ahead.x, e.pos.z - this.ahead.z + FLIGHT_SPEED * STEP);
@@ -199,7 +204,7 @@ export class Enemies {
       // That is the path's motion plus the frame's own: the whole formation flies along the rail too.
       this.ahead.subVectors(e.pos, e.prevPos);
       this.ahead.z -= FLIGHT_SPEED * STEP;
-      const moving = e.t >= STEP;
+      const moving = !fresh;
       const travel = moving ? Math.atan2(-this.ahead.x, -this.ahead.z) : e.heading;
       const turn = wrapAngle(travel - e.heading) * HEADING_EASE;
       const turnRate = turn / STEP;
@@ -212,7 +217,7 @@ export class Enemies {
       this.ahead.set(-Math.sin(heading) * level, Math.sin(e.pitch), -Math.cos(heading) * level).add(e.pos);
       e.quat.setFromRotationMatrix(this.look.lookAt(e.pos, this.ahead, UP));
       e.quat.multiply(this.rollQuat.setFromAxisAngle(FORWARD, e.roll));
-      if (e.t < STEP) e.prevQuat.copy(e.quat);
+      if (fresh) e.prevQuat.copy(e.quat);
     }
   }
 
@@ -259,6 +264,7 @@ export class Enemies {
       // Stagger heights a little so the line reads as a formation, not a single file.
       e.lane = wave.lane + (spawned % 2 === 0 ? 0 : 2.5);
       e.t = -spawned * SPACING;
+      e.fresh = true;
       e.hp = HIT_POINTS;
       e.flash = 0;
       e.roll = 0;
