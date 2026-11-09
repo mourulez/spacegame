@@ -1,0 +1,264 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #8c8c8c;
+  color: #f4f9ff;
+  font: 14px/1.3 system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.hud {
+  position: fixed;
+  left: calc(env(safe-area-inset-left) + 8px);
+  top: calc(env(safe-area-inset-top) + 8px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgb(10 20 40 / 0.55);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.panel {
+  position: fixed;
+  right: calc(env(safe-area-inset-right) + 8px);
+  top: calc(env(safe-area-inset-top) + 8px);
+  width: min(270px, 48vw);
+  max-height: calc(100% - 16px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.3) transparent;
+  border-radius: 10px;
+  background: rgb(10 20 40 / 0.7);
+}
+
+.panel-toggle {
+  width: 100%;
+  font-weight: 600;
+  text-align: left;
+}
+
+.panel-toggle[aria-expanded='false'] + .panel-body {
+  display: none;
+}
+
+/* One column as wide as the panel: nothing (a long model name, say) may push it wider. */
+.panel-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.panel label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.panel select {
+  width: 100%;
+  min-width: 0;
+}
+
+.panel .file input {
+  display: none;
+}
+
+.panel .file {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.12);
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.12);
+  cursor: pointer;
+}
+
+select option {
+  color: #111;
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+}
+
+.seg button {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.seg button[aria-pressed='true'] {
+  background: #2f6fd8;
+}
+
+.status {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+/* The look's settings. */
+
+.group {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(255 255 255 / 0.15);
+}
+
+.group h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel .field label {
+  display: block;
+  cursor: pointer;
+}
+
+.field.changed .row label::before {
+  content: '●';
+  margin-right: 4px;
+  color: #ffc04a;
+  font-size: 10px;
+  vertical-align: 2px;
+}
+
+.field.off {
+  opacity: 0.45;
+}
+
+.field.off label {
+  cursor: default;
+}
+
+.field output {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.hint[hidden] {
+  display: none;
+}
+
+input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: #2f6fd8;
+}
+
+.switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 0.2);
+  cursor: pointer;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.switch:checked {
+  background: #2f6fd8;
+}
+
+.switch:checked::after {
+  transform: translateX(16px);
+}
+
+button:disabled,
+input:disabled {
+  cursor: default;
+}
+
+#params,
+.group,
+.field {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#params {
+  display: grid;
+  gap: 10px;
+}
+
+/* Wireframe and effects, bottom left, away from the settings. */
+.view-toggles {
+  position: fixed;
+  left: calc(env(safe-area-inset-left) + 8px);
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  display: flex;
+  gap: 6px;
+}
+
+.view-toggles button {
+  padding: 8px 14px;
+  font-weight: 600;
+  background: rgb(10 20 40 / 0.7);
+}
+
+.view-toggles button[aria-pressed='true'] {
+  background: #2f6fd8;
+}

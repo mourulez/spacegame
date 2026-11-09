@@ -9,6 +9,12 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
+    "viewer": "vite -c vite.viewer.config.ts",
+    "viewer:lan": "vite -c vite.viewer.config.ts --host",
+    "build:viewer": "tsc --noEmit && vite build -c vite.viewer.config.ts",
+    "render:release": "node tools/render-release.mjs",
+    "asset:demo-ship": "node viewer/samples/demo-ship/generate.ts",
+    "asset:blend": "node tools/blend-export.mjs",
     "test": "playwright test"
   },
   "dependencies": {
@@ -16,6 +22,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { STEP } from '../core/loop';
 import { RETICLE_ORDER } from './reticle';
-import { outlineMaterial } from './toon';
+import { outlineMaterial } from '../render/toon';
 
 /*
  * The player's shots, in combat space (see CombatFrame). The ship fires on

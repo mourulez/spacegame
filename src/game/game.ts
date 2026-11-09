@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Input } from '../core/input';
 import { FixedLoop, STEP } from '../core/loop';
+import { createRenderer, resizeRenderer } from '../render/renderer';
 import { Hud } from '../ui/hud';
 import { Atmosphere } from './atmosphere';
 import { Bullets } from './bullets';
@@ -17,8 +18,6 @@ import { Shots, segmentHitsSphere } from './shots';
 import { Sky } from './sky';
 import { Steering } from './steering';
 import { Trail } from './trail';
-
-const MAX_PIXEL_RATIO = 2; // high-DPI phones would otherwise render 3x+
 
 /** Hits the shield takes before the ship goes down. */
 const SHIELD_MAX = 5;
@@ -71,9 +70,7 @@ export class Game {
   private readonly drawingBuffer = new THREE.Vector2();
 
   constructor(private readonly canvas: HTMLCanvasElement, ui: HTMLElement) {
-    // At 2x pixel density and up, edges are fine without MSAA, which is costly on phones.
-    const antialias = window.devicePixelRatio < 2;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias, powerPreference: 'high-performance' });
+    this.renderer = createRenderer(canvas);
 
     this.input = new Input(canvas);
     this.hud = new Hud(ui);
@@ -244,8 +241,7 @@ export class Game {
   private resize = () => {
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
-    this.renderer.setSize(width, height, false);
+    resizeRenderer(this.renderer, width, height);
     this.renderer.getDrawingBufferSize(this.drawingBuffer);
     this.clouds.setSize(this.drawingBuffer.x, this.drawingBuffer.y);
     this.rig.fit(width / height);

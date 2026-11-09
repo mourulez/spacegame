@@ -16,5 +16,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "tests", "playwright.config.ts"]
+  "include": ["src", "viewer", "tests", "playwright.config.ts"]
 }

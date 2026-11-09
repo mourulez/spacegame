@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { STEP } from '../core/loop';
 import { SPEED as FLIGHT_SPEED } from './flight';
-import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from './toon';
+import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from '../render/toon';
 
 /*
  * Enemy waves, in combat space (see CombatFrame): x right, y up, -z ahead.

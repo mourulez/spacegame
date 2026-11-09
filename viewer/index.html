@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <!-- A development tool, published only to test on phones: keep it out of search engines. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="data:," />
+    <title>Visor cel</title>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="hud" class="hud"></div>
+    <div class="view-toggles" role="group" aria-label="Vista">
+      <button id="wireframe" aria-pressed="false">Wireframe</button>
+      <button id="effects" aria-pressed="true">Efectos</button>
+    </div>
+    <aside id="panel" class="panel">
+      <button id="panel-toggle" class="panel-toggle" aria-expanded="true">Visor</button>
+      <div class="panel-body">
+        <label>Modelo <select id="model"></select></label>
+        <label class="file">Abrir .glb… <input id="file" type="file" accept=".glb" /></label>
+        <button id="game-view">Vista de juego</button>
+        <div class="field">
+          <div class="row"><label for="ground">Suelo</label><input id="ground" type="checkbox" class="switch" checked /></div>
+        </div>
+        <p id="status" class="status"></p>
+        <div id="params"></div>
+        <button id="reset-params">Valores por defecto</button>
+      </div>
+    </aside>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

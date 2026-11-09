@@ -25,9 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npm run build:viewer
+      # The game at the site's root, the viewer under /viewer/. dist/ itself stays game only (it is the portal build).
+      - run: mkdir _site && cp -r dist/. _site/ && cp -r dist-viewer _site/viewer
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: dist
+          path: _site
 
   deploy:
     needs: build

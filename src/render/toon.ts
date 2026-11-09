@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import outlineFragment from './shaders/outline.frag.glsl?raw';
+import outlineVertex from './shaders/outline.vert.glsl?raw';
 
 /*
- * Cel-shading helpers shared by the player's ship and the enemies: a
- * three-tone light ramp for MeshToonMaterial, and inverted-hull outlines.
+ * Cel-shading helpers shared by the player's ship, the enemies and the
+ * viewer: a three-tone light ramp for MeshToonMaterial, and inverted-hull
+ * outlines.
  */
 
 let ramp: THREE.DataTexture | null = null;
@@ -60,22 +63,7 @@ export function outlineMaterial(color: THREE.ColorRepresentation, width: number)
       color: { value: new THREE.Color(color) },
       width: { value: width },
     },
-    vertexShader: /* glsl */ `
-      uniform float width;
-      void main() {
-        vec4 p = vec4(position + normal * width, 1.0);
-        #ifdef USE_INSTANCING
-          p = instanceMatrix * p;
-        #endif
-        gl_Position = projectionMatrix * modelViewMatrix * p;
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 color;
-      void main() {
-        gl_FragColor = vec4(color, 1.0);
-        #include <colorspace_fragment>
-      }
-    `,
+    vertexShader: outlineVertex,
+    fragmentShader: outlineFragment,
   });
 }

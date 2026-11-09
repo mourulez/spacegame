@@ -3,7 +3,7 @@ import { STEP } from '../core/loop';
 import { BASE_PITCH } from './camera-rig';
 import type { Flight } from './flight';
 import { CAMERA_FOLLOW, SHIP_BOX, SHIP_BOX_REST_Y, SHIP_DISTANCE } from './play-area';
-import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from './toon';
+import { mergeParts, mirrorX, outlineGeometry, outlineMaterial, toonRamp } from '../render/toon';
 
 // The ship's spring toward its steering: critically damped, so it settles smoothly without overshooting.
 const FREQ = 9; // rad/s

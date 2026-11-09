@@ -1,7 +1,12 @@
 node_modules/
 dist/
+dist-viewer/
+_site/
 *.local
 .DS_Store
 test-results/
 playwright-report/
 screenshots/
+
+# Source art and the models tried in the viewer: kept out of the repo (the game ships optimized copies in src/assets/).
+art/

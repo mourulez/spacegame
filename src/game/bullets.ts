@@ -3,7 +3,7 @@ import { STEP } from '../core/loop';
 import type { Enemies } from './enemies';
 import { AIM_SLOPE, SHIP_HIT_RADIUS } from './play-area';
 import { segmentHitsSphere } from './shots';
-import { outlineGeometry } from './toon';
+import { outlineGeometry } from '../render/toon';
 
 /*
  * Enemy fire, in combat space (see CombatFrame): few, slow, round bullets,
